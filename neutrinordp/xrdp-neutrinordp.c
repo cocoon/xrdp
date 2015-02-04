@@ -1424,7 +1424,8 @@ lfreerdp_pre_connect(freerdp *instance)
         instance->settings->remote_app = 1;
         instance->settings->rail_langbar_supported = 1;
         instance->settings->workarea = 1;
-        instance->settings->performance_flags = PERF_DISABLE_WALLPAPER | PERF_DISABLE_FULLWINDOWDRAG;
+        /*instance->settings->performance_flags = PERF_DISABLE_WALLPAPER | PERF_DISABLE_FULLWINDOWDRAG;*/
+        instance->settings->performance_flags = PERF_DISABLE_FULLWINDOWDRAG;
         instance->settings->num_icon_caches = mod->client_info.wnd_num_icon_caches;
         instance->settings->num_icon_cache_entries = mod->client_info.wnd_num_icon_cache_entries;
 
@@ -1433,9 +1434,10 @@ lfreerdp_pre_connect(freerdp *instance)
     else
     {
         LLOGLN(10, ("Special PerformanceFlags changed"));
-        instance->settings->performance_flags = PERF_DISABLE_WALLPAPER |
+        instance->settings->performance_flags = PERF_DISABLE_CURSOR_SHADOW | PERF_DISABLE_CURSORSETTINGS;
+        /*instance->settings->performance_flags = PERF_DISABLE_WALLPAPER |
                 PERF_DISABLE_FULLWINDOWDRAG | PERF_DISABLE_MENUANIMATIONS |
-                PERF_DISABLE_THEMING;
+                PERF_DISABLE_THEMING;*/
                 // | PERF_DISABLE_CURSOR_SHADOW | PERF_DISABLE_CURSORSETTINGS;
     }
     instance->settings->compression = 0;
