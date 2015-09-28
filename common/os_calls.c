@@ -86,6 +86,12 @@ extern char **environ;
 #include <linux/unistd.h>
 #endif
 
+/* sys/ucred.h needs to be included to use struct xucred
+ * in FreeBSD and OS X. No need for other BSDs  */
+#if defined(__FreeBSD__) || defined(__APPLE__)
+#include <sys/ucred.h>
+#endif
+
 /* for solaris */
 #if !defined(PF_LOCAL)
 #define PF_LOCAL AF_UNIX
@@ -126,8 +132,12 @@ g_mk_temp_dir(const char *app_name)
             {
                 if (!g_create_dir("/tmp/.xrdp"))
                 {
-                    printf("g_mk_temp_dir: g_create_dir failed\n");
-                    return 1;
+                    /* if failed, still check if it got created by someone else */
+                    if (!g_directory_exist("/tmp/.xrdp"))
+                    {
+                        printf("g_mk_temp_dir: g_create_dir failed\n");
+                        return 1;
+                    }
                 }
 
                 g_chmod_hex("/tmp/.xrdp", 0x1777);
@@ -453,7 +463,7 @@ g_tcp_socket(void)
     unsigned int option_len;
 #endif
 
-#if 0 && !defined(NO_ARPA_INET_H_IP6)
+#if defined(XRDP_ENABLE_IPV6) && !defined(NO_ARPA_INET_H_IP6)
     rv = (int)socket(AF_INET6, SOCK_STREAM, 0);
 #else
     rv = (int)socket(AF_INET, SOCK_STREAM, 0);
@@ -462,7 +472,7 @@ g_tcp_socket(void)
     {
         return -1;
     }
-#if 0 && !defined(NO_ARPA_INET_H_IP6)
+#if defined(XRDP_ENABLE_IPV6) && !defined(NO_ARPA_INET_H_IP6)
     option_len = sizeof(option_value);
     if (getsockopt(rv, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&option_value,
                    &option_len) == 0)
@@ -471,8 +481,11 @@ g_tcp_socket(void)
         {
             option_value = 0;
             option_len = sizeof(option_value);
-            setsockopt(rv, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&option_value,
-                       option_len);
+            if (setsockopt(rv, IPPROTO_IPV6, IPV6_V6ONLY, (char*)&option_value,
+                       option_len) < 0)
+            {
+                log_message(LOG_LEVEL_ERROR, "g_tcp_socket: setsockopt() failed\n");
+            }
         }
     }
 #endif
@@ -484,8 +497,11 @@ g_tcp_socket(void)
         {
             option_value = 1;
             option_len = sizeof(option_value);
-            setsockopt(rv, SOL_SOCKET, SO_REUSEADDR, (char *)&option_value,
-                       option_len);
+            if (setsockopt(rv, SOL_SOCKET, SO_REUSEADDR, (char *)&option_value,
+                       option_len) < 0)
+            {
+                log_message(LOG_LEVEL_ERROR, "g_tcp_socket: setsockopt() failed\n");
+            }
         }
     }
 
@@ -498,8 +514,11 @@ g_tcp_socket(void)
         {
             option_value = 1024 * 32;
             option_len = sizeof(option_value);
-            setsockopt(rv, SOL_SOCKET, SO_SNDBUF, (char *)&option_value,
-                       option_len);
+            if (setsockopt(rv, SOL_SOCKET, SO_SNDBUF, (char *)&option_value,
+                       option_len) < 0)
+            {
+                log_message(LOG_LEVEL_ERROR, "g_tcp_socket: setsockopt() failed\n");
+            }
         }
     }
 
@@ -643,6 +662,28 @@ g_sck_get_peer_cred(int sck, int *pid, int *uid, int *gid)
         *gid = credentials.gid;
     }
     return 0;
+#elif defined(LOCAL_PEERCRED)
+    /* FreeBSD, OS X reach here*/
+    struct xucred xucred;
+    unsigned int xucred_length;
+    xucred_length = sizeof(xucred);
+
+    if (getsockopt(sck, SOL_SOCKET, LOCAL_PEERCRED, &xucred, &xucred_length))
+    {
+            return 1;
+    }
+    if (pid !=0)
+    {
+        *pid = 0; /* can't get pid in FreeBSD, OS X */
+    }
+    if (uid != 0)
+    {
+        *uid = xucred.cr_uid;
+    }
+    if (gid != 0) {
+        *gid = xucred.cr_gid;
+    }
+    return 0;
 #else
     return 1;
 #endif
@@ -670,7 +711,7 @@ g_tcp_close(int sck)
 
 /*****************************************************************************/
 /* returns error, zero is good */
-#if 0
+#if defined(XRDP_ENABLE_IPV6) && !defined(NO_ARPA_INET_H_IP6)
 int APP_CC
 g_tcp_connect(int sck, const char *address, const char *port)
 {
@@ -690,7 +731,6 @@ g_tcp_connect(int sck, const char *address, const char *port)
     */
     p.ai_socktype = SOCK_STREAM;
     p.ai_protocol = IPPROTO_TCP;
-#if !defined(NO_ARPA_INET_H_IP6)
     p.ai_flags = AI_ADDRCONFIG | AI_V4MAPPED;
     p.ai_family = AF_INET6;
     if (g_strcmp(address, "127.0.0.1") == 0)
@@ -701,11 +741,6 @@ g_tcp_connect(int sck, const char *address, const char *port)
     {
         res = getaddrinfo(address, port, &p, &h);
     }
-#else
-    p.ai_flags = AI_ADDRCONFIG;
-    p.ai_family = AF_INET;
-    res = getaddrinfo(address, port, &p, &h);
-#endif
     if (res > -1)
     {
         if (h != NULL)
@@ -768,7 +803,9 @@ g_tcp_local_connect(int sck, const char *port)
 
     memset(&s, 0, sizeof(struct sockaddr_un));
     s.sun_family = AF_UNIX;
-    strcpy(s.sun_path, port);
+    strncpy(s.sun_path, port, sizeof(s.sun_path));
+    s.sun_path[sizeof(s.sun_path) - 1] = 0;
+
     return connect(sck, (struct sockaddr *)&s, sizeof(struct sockaddr_un));
 #endif
 }
@@ -785,12 +822,15 @@ g_tcp_set_non_blocking(int sck)
 #else
     i = fcntl(sck, F_GETFL);
     i = i | O_NONBLOCK;
-    fcntl(sck, F_SETFL, i);
+    if (fcntl(sck, F_SETFL, i) < 0)
+    {
+        log_message(LOG_LEVEL_ERROR, "g_tcp_set_non_blocking: fcntl() failed\n");
+    }
 #endif
     return 0;
 }
 
-#if 0
+#if defined(XRDP_ENABLE_IPV6)
 /*****************************************************************************/
 /* return boolean */
 static int APP_CC
@@ -858,7 +898,7 @@ address_match(const char *address, struct addrinfo *j)
 }
 #endif
 
-#if 0
+#if defined(XRDP_ENABLE_IPV6)
 /*****************************************************************************/
 /* returns error, zero is good */
 static int APP_CC
@@ -925,12 +965,14 @@ g_tcp_local_bind(int sck, const char *port)
 
     memset(&s, 0, sizeof(struct sockaddr_un));
     s.sun_family = AF_UNIX;
-    strcpy(s.sun_path, port);
+    strncpy(s.sun_path, port, sizeof(s.sun_path));
+    s.sun_path[sizeof(s.sun_path) - 1] = 0;
+
     return bind(sck, (struct sockaddr *)&s, sizeof(struct sockaddr_un));
 #endif
 }
 
-#if 0
+#if defined(XRDP_ENABLE_IPV6)
 /*****************************************************************************/
 /* returns error, zero is good */
 int APP_CC
@@ -1421,7 +1463,12 @@ g_set_wait_obj(tbus obj)
         return 1;
     }
 
-    sendto(s, "sig", 4, 0, (struct sockaddr *)&sa, sa_size);
+    if (sendto(s, "sig", 4, 0, (struct sockaddr *)&sa, sa_size) < 0)
+    {
+        close(s);
+        return 1;
+    }
+
     close(s);
     return 0;
 #endif
@@ -1934,8 +1981,7 @@ g_mkdir(const char *dirname)
 #if defined(_WIN32)
     return 0;
 #else
-    mkdir(dirname, S_IRWXU);
-    return 0;
+    return mkdir(dirname, S_IRWXU);
 #endif
 }
 
@@ -3152,6 +3198,158 @@ g_time3(void)
 #endif
 }
 
+/******************************************************************************/
+/******************************************************************************/
+struct bmp_magic
+{
+    char magic[2];
+};
+
+struct bmp_hdr
+{
+    unsigned int   size;        /* file size in bytes */
+    unsigned short reserved1;
+    unsigned short reserved2;
+    unsigned int   offset;      /* offset to image data, in bytes */
+};
+
+struct dib_hdr
+{
+    unsigned int   hdr_size;
+    int            width;
+    int            height;
+    unsigned short nplanes;
+    unsigned short bpp;
+    unsigned int   compress_type;
+    unsigned int   image_size;
+    int            hres;
+    int            vres;
+    unsigned int   ncolors;
+    unsigned int   nimpcolors;
+    };
+
+/******************************************************************************/
+int APP_CC
+g_save_to_bmp(const char* filename, char* data, int stride_bytes,
+              int width, int height, int depth, int bits_per_pixel)
+{
+    struct bmp_magic bm;
+    struct bmp_hdr bh;
+    struct dib_hdr dh;
+    int bytes;
+    int fd;
+    int index;
+    int i1;
+    int pixel;
+    int extra;
+    int file_stride_bytes;
+    char* line;
+    char* line_ptr;
+    
+    if ((depth == 24) && (bits_per_pixel == 32))
+    {
+    }
+    else if ((depth == 32) && (bits_per_pixel == 32))
+    {
+    }
+    else
+    {
+        g_writeln("g_save_to_bpp: unimp");
+        return 1;
+    }
+    bm.magic[0] = 'B';
+    bm.magic[1] = 'M';
+
+    /* scan lines are 32 bit aligned, bottom 2 bits must be zero */
+    file_stride_bytes = width * ((depth + 7) / 8);
+    extra = file_stride_bytes;
+    extra = extra & 3;
+    extra = (4 - extra) & 3;
+    file_stride_bytes += extra;
+
+    bh.size = sizeof(bm) + sizeof(bh) + sizeof(dh) + height * file_stride_bytes;
+    bh.reserved1 = 0;
+    bh.reserved2 = 0;
+    bh.offset = sizeof(bm) + sizeof(bh) + sizeof(dh);
+    
+    dh.hdr_size = sizeof(dh);
+    dh.width = width;
+    dh.height = height;
+    dh.nplanes = 1;
+    dh.bpp = depth;
+    dh.compress_type = 0;
+    dh.image_size = height * file_stride_bytes;
+    dh.hres = 0xb13;
+    dh.vres = 0xb13;
+    dh.ncolors = 0;
+    dh.nimpcolors = 0;
+
+    fd = open(filename, O_RDWR | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+    if (fd == -1)
+    {
+        g_writeln("g_save_to_bpp: open error");
+        return 1;
+    }
+    bytes = write(fd, &bm, sizeof(bm));
+    if (bytes != sizeof(bm))
+    {
+        g_writeln("g_save_to_bpp: write error");
+    }
+    bytes = write(fd, &bh, sizeof(bh));
+    if (bytes != sizeof(bh))
+    {
+        g_writeln("g_save_to_bpp: write error");
+    }
+    bytes = write(fd, &dh, sizeof(dh));
+    if (bytes != sizeof(dh))
+    {
+        g_writeln("g_save_to_bpp: write error");
+    }
+    data += stride_bytes * height;
+    data -= stride_bytes;
+    if ((depth == 24) && (bits_per_pixel == 32))
+    {
+        line = malloc(file_stride_bytes);
+        memset(line, 0, file_stride_bytes);
+        for (index = 0; index < height; index++)
+        {
+            line_ptr = line;
+            for (i1 = 0; i1 < width; i1++)
+            {
+                pixel = ((int*)data)[i1];
+                *(line_ptr++) = (pixel >>  0) & 0xff;
+                *(line_ptr++) = (pixel >>  8) & 0xff;
+                *(line_ptr++) = (pixel >> 16) & 0xff;
+            }
+            bytes = write(fd, line, file_stride_bytes);
+            if (bytes != file_stride_bytes)
+            {
+                g_writeln("g_save_to_bpp: write error");
+            }
+            data -= stride_bytes;
+        }
+        free(line);
+    }
+    else if (depth == bits_per_pixel)
+    {
+        for (index = 0; index < height; index++)
+        {
+            bytes = write(fd, data, width * (bits_per_pixel / 8));
+            if (bytes != width * (bits_per_pixel / 8))
+            {
+                g_writeln("g_save_to_bpp: write error");
+            }
+            data -= stride_bytes;
+        }
+    }
+    else
+    {
+        g_writeln("g_save_to_bpp: unimp");
+    }
+    close(fd);
+    return 0;
+}
+
 /*****************************************************************************/
 /* returns boolean */
 int APP_CC
@@ -3198,3 +3396,60 @@ g_gethostname(char *name, int len)
 {
     return gethostname(name, len);
 }
+
+static unsigned char g_reverse_byte[0x100] =
+{
+    0x00, 0x80, 0x40, 0xc0, 0x20, 0xa0, 0x60, 0xe0,
+    0x10, 0x90, 0x50, 0xd0, 0x30, 0xb0, 0x70, 0xf0,
+    0x08, 0x88, 0x48, 0xc8, 0x28, 0xa8, 0x68, 0xe8,
+    0x18, 0x98, 0x58, 0xd8, 0x38, 0xb8, 0x78, 0xf8,
+    0x04, 0x84, 0x44, 0xc4, 0x24, 0xa4, 0x64, 0xe4,
+    0x14, 0x94, 0x54, 0xd4, 0x34, 0xb4, 0x74, 0xf4,
+    0x0c, 0x8c, 0x4c, 0xcc, 0x2c, 0xac, 0x6c, 0xec,
+    0x1c, 0x9c, 0x5c, 0xdc, 0x3c, 0xbc, 0x7c, 0xfc,
+    0x02, 0x82, 0x42, 0xc2, 0x22, 0xa2, 0x62, 0xe2,
+    0x12, 0x92, 0x52, 0xd2, 0x32, 0xb2, 0x72, 0xf2,
+    0x0a, 0x8a, 0x4a, 0xca, 0x2a, 0xaa, 0x6a, 0xea,
+    0x1a, 0x9a, 0x5a, 0xda, 0x3a, 0xba, 0x7a, 0xfa,
+    0x06, 0x86, 0x46, 0xc6, 0x26, 0xa6, 0x66, 0xe6,
+    0x16, 0x96, 0x56, 0xd6, 0x36, 0xb6, 0x76, 0xf6,
+    0x0e, 0x8e, 0x4e, 0xce, 0x2e, 0xae, 0x6e, 0xee,
+    0x1e, 0x9e, 0x5e, 0xde, 0x3e, 0xbe, 0x7e, 0xfe,
+    0x01, 0x81, 0x41, 0xc1, 0x21, 0xa1, 0x61, 0xe1,
+    0x11, 0x91, 0x51, 0xd1, 0x31, 0xb1, 0x71, 0xf1,
+    0x09, 0x89, 0x49, 0xc9, 0x29, 0xa9, 0x69, 0xe9,
+    0x19, 0x99, 0x59, 0xd9, 0x39, 0xb9, 0x79, 0xf9,
+    0x05, 0x85, 0x45, 0xc5, 0x25, 0xa5, 0x65, 0xe5,
+    0x15, 0x95, 0x55, 0xd5, 0x35, 0xb5, 0x75, 0xf5,
+    0x0d, 0x8d, 0x4d, 0xcd, 0x2d, 0xad, 0x6d, 0xed,
+    0x1d, 0x9d, 0x5d, 0xdd, 0x3d, 0xbd, 0x7d, 0xfd,
+    0x03, 0x83, 0x43, 0xc3, 0x23, 0xa3, 0x63, 0xe3,
+    0x13, 0x93, 0x53, 0xd3, 0x33, 0xb3, 0x73, 0xf3,
+    0x0b, 0x8b, 0x4b, 0xcb, 0x2b, 0xab, 0x6b, 0xeb,
+    0x1b, 0x9b, 0x5b, 0xdb, 0x3b, 0xbb, 0x7b, 0xfb,
+    0x07, 0x87, 0x47, 0xc7, 0x27, 0xa7, 0x67, 0xe7,
+    0x17, 0x97, 0x57, 0xd7, 0x37, 0xb7, 0x77, 0xf7,
+    0x0f, 0x8f, 0x4f, 0xcf, 0x2f, 0xaf, 0x6f, 0xef,
+    0x1f, 0x9f, 0x5f, 0xdf, 0x3f, 0xbf, 0x7f, 0xff
+};
+
+/*****************************************************************************/
+/* mirror each byte while copying */
+int APP_CC
+g_mirror_memcpy(void *dst, const void *src, int len)
+{
+    tui8 *dst8;
+    const tui8 *src8;
+
+    dst8 = (tui8 *) dst;
+    src8 = (const tui8 *) src;
+    while (len > 0)
+    {
+        *dst8 = g_reverse_byte[*src8];
+        dst8++;
+        src8++;
+        len--;
+    }
+    return 0;
+}
+

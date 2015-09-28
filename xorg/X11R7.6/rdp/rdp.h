@@ -90,7 +90,7 @@ CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #  endif
 #endif
 
-#define X11RDPVER "0.7.0"
+#define X11RDPVER "0.9.0"
 
 #define PixelDPI 100
 #define PixelToMM(_size) (((_size) * 254 + (PixelDPI) * 5) / ((PixelDPI) * 10))
@@ -508,7 +508,7 @@ KbdAddEvent(int down, int param1, int param2, int param3, int param4);
 void
 KbdSync(int param1);
 int
-rdpLoadLayout(int keylayout);
+rdpLoadLayout(struct xrdp_client_info *client_info);
 
 /* rdpup.c */
 int

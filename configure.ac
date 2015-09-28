@@ -7,6 +7,28 @@ AM_INIT_AUTOMAKE([1.6 foreign])
 AC_PROG_CC
 AC_C_CONST
 AC_PROG_LIBTOOL
+PKG_PROG_PKG_CONFIG
+
+case $host_os in
+	*linux*)
+		linux=yes
+		;;
+	*freebsd*)
+		freebsd=yes
+		;;
+	*netbsd*)
+		netbsd=yes
+		;;
+	*openbsd*)
+		openbsd=yes
+		;;
+esac
+
+AM_CONDITIONAL(LINUX, [test "x$linux" = xyes])
+AM_CONDITIONAL(FREEBSD, [test "x$freebsd" = xyes])
+AM_CONDITIONAL(OPENBSD, [test "x$openbsd" = xyes])
+AM_CONDITIONAL(NETBSD, [test "x$netbsd" = xyes])
+
 AC_ARG_WITH([systemdsystemunitdir],
         AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
         [], [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
@@ -15,54 +37,66 @@ if test "x$with_systemdsystemunitdir" != xno; then
 fi
 AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != xno ])
 
+AC_ARG_ENABLE(pam, AS_HELP_STRING([--disable-pam],
+              [Build PAM support (default: yes)]),
+              [], [enable_pam=yes])
 AC_ARG_ENABLE(nopam, AS_HELP_STRING([--enable-nopam],
-              [Build no PAM support (default: no)]),
-              [nopam=true], [nopam=false])
-AM_CONDITIONAL(SESMAN_NOPAM, [test x$nopam = xtrue])
+              [Build no PAM support (default: no, deprecated)]),
+              [
+                  if test "x$enable_nopam" = "xyes"
+                  then
+                      enable_pam=no
+                      AC_MSG_WARN([--enable-nopam option is deprecated. Please use --disable-pam instead.])
+                  fi
+              ])
+AM_CONDITIONAL(SESMAN_NOPAM, [test x$enable_pam != xyes])
+AC_ARG_ENABLE(ipv6, AS_HELP_STRING([--enable-ipv6],
+              [Build IPv6 support (default: no, experimental)]),
+              [], [enable_ipv6=no])
 AC_ARG_ENABLE(kerberos, AS_HELP_STRING([--enable-kerberos],
               [Build kerberos support (default: no)]),
-              [kerberos=true], [kerberos=false])
-AM_CONDITIONAL(SESMAN_KERBEROS, [test x$kerberos = xtrue])
+              [], [enable_kerberos=no])
+AC_ARG_ENABLE(bsd, AS_HELP_STRING([--enable-bsd],
+              [Build BSD auth support (default: no)]),
+              [bsd=true], [bsd=false])
+AM_CONDITIONAL(SESMAN_BSD, [test x$bsd = xtrue])
+AM_CONDITIONAL(SESMAN_KERBEROS, [test x$enable_kerberos = xyes])
 AC_ARG_ENABLE(pamuserpass, AS_HELP_STRING([--enable-pamuserpass],
               [Build pam userpass support (default: no)]),
-              [pamuserpass=true], [pamuserpass=false])
-AM_CONDITIONAL(SESMAN_PAMUSERPASS, [test x$pamuserpass = xtrue])
+              [], [enable_pamuserpass=no])
+AM_CONDITIONAL(SESMAN_PAMUSERPASS, [test x$enable_pamuserpass = xyes])
 AC_ARG_ENABLE(xrdpdebug, AS_HELP_STRING([--enable-xrdpdebug],
               [Build debug (default: no)]),
-              [xrdpdebug=true], [xrdpdebug=false])
-AM_CONDITIONAL(XRDP_DEBUG, [test x$xrdpdebug = xtrue])
+              [], [enable_xrdpdebug=no])
+AM_CONDITIONAL(XRDP_DEBUG, [test x$enable_xrdpdebug = xyes])
 AC_ARG_ENABLE(neutrinordp, AS_HELP_STRING([--enable-neutrinordp],
               [Build neutrinordp module (default: no)]),
-              [neutrinordp=true], [neutrinordp=false])
-AM_CONDITIONAL(XRDP_NEUTRINORDP, [test x$neutrinordp = xtrue])
+              [], [enable_neutrinordp=no])
+AM_CONDITIONAL(XRDP_NEUTRINORDP, [test x$enable_neutrinordp = xyes])
 AC_ARG_ENABLE(jpeg, AS_HELP_STRING([--enable-jpeg],
               [Build jpeg module (default: no)]),
-              [jpeg=true], [jpeg=false])
-AM_CONDITIONAL(XRDP_JPEG, [test x$jpeg = xtrue])
+              [], [enable_jpeg=no])
+AM_CONDITIONAL(XRDP_JPEG, [test x$enable_jpeg = xyes])
 AC_ARG_ENABLE(tjpeg, AS_HELP_STRING([--enable-tjpeg],
               [Build turbo jpeg module (default: no)]),
-              [tjpeg=true], [tjpeg=false])
-AM_CONDITIONAL(XRDP_TJPEG, [test x$tjpeg = xtrue])
-
-AC_ARG_ENABLE(simplesound, AS_HELP_STRING([--enable-simplesound],
-              [Build simple pulse audio interface (default: no)]),
-              [simplesound=true], [simplesound=false])
-AM_CONDITIONAL(XRDP_SIMPLESOUND, [test x$simplesound = xtrue])
-
+              [], [enable_tjpeg=no])
+AM_CONDITIONAL(XRDP_TJPEG, [test x$enable_tjpeg = xyes])
 AC_ARG_ENABLE(fuse, AS_HELP_STRING([--enable-fuse],
               [Build fuse(clipboard file / drive redir) (default: no)]),
-              [fuse=true], [fuse=false])
-AM_CONDITIONAL(XRDP_FUSE, [test x$fuse = xtrue])
-
-AC_ARG_ENABLE(loadpulsemodules, AS_HELP_STRING([--enable-loadpulsemodules],
-              [Build code to load pulse audio modules (default: no)]),
-              [loadpulsemodules=true], [loadpulsemodules=false])
-AM_CONDITIONAL(XRDP_LOAD_PULSE_MODULES, [test x$loadpulsemodules = xtrue])
-
+              [], [enable_fuse=no])
+AM_CONDITIONAL(XRDP_FUSE, [test x$enable_fuse = xyes])
 AC_ARG_ENABLE(xrdpvr, AS_HELP_STRING([--enable-xrdpvr],
               [Build xrdpvr module (default: no)]),
-              [xrdpvr=true], [xrdpvr=false])
-AM_CONDITIONAL(XRDP_XRDPVR, [test x$xrdpvr = xtrue])
+              [], [enable_xrdpvr=no])
+AM_CONDITIONAL(XRDP_XRDPVR, [test x$enable_xrdpvr = xyes])
+AC_ARG_ENABLE(rfxcodec, AS_HELP_STRING([--enable-rfxcodec],
+              [Build using librfxcodec (default: no)]),
+              [], [enable_rfxcodec=no])
+AM_CONDITIONAL(XRDP_RFXCODEC, [test x$enable_rfxcodec = xyes])
+AC_ARG_ENABLE(opus, AS_HELP_STRING([--enable-opus],
+              [Build opus(audio codec) (default: no)]),
+              [], [enable_opus=no])
+AM_CONDITIONAL(XRDP_OPUS, [test x$enable_opus = xyes])
 
 AM_CONDITIONAL(GOT_PREFIX, test "x${prefix}" != "xNONE"])
 
@@ -71,14 +105,31 @@ AC_CHECK_HEADER([openssl/rc4.h], [],
   [AC_MSG_ERROR([please install libssl-dev or openssl-devel])],
   [#include <stdlib.h>])
 
+# checking for pam variation
+# Linux-PAM is used in Linux systems
+# OpenPAM is used by FreeBSD, NetBSD, DragonFly BSD and OS X
+# OpenBSD uses BSD Authentication rather than both PAMs
+AC_CHECK_HEADER([security/_pam_types.h],
+                [AC_DEFINE([HAVE__PAM_TYPES_H], 1, [Using Linux-PAM], [])])
+AC_CHECK_HEADER([security/pam_constants.h],
+                [AC_DEFINE([HAVE_PAM_CONSTANTS_H], 1, [Using OpenPAM], [])])
+
 # checking if pam should be autodetected.
-if test -z "$enable_nopam"
+if test "x$enable_pam" = "xyes"
 then
-  if test -z "$enable_kerberos"
+  if test "x$enable_kerberos" != "xyes"
   then
-    AC_CHECK_HEADER([security/pam_appl.h], [],
-      [AC_MSG_ERROR([please install libpam0g-dev or pam-devel])])
+    if test -z "$enable_bsd"
+    then
+      AC_CHECK_HEADER([security/pam_appl.h], [],
+        [AC_MSG_ERROR([please install libpam0g-dev or pam-devel])])
+    fi
   fi
+fi
+
+if test "x$enable_ipv6" = "xyes"
+then
+  AC_DEFINE([XRDP_ENABLE_IPV6],1,[Enable IPv6])
 fi
 
 AC_CHECK_MEMBER([struct in6_addr.s6_addr],
@@ -86,7 +137,7 @@ AC_CHECK_MEMBER([struct in6_addr.s6_addr],
                 [AC_DEFINE(NO_ARPA_INET_H_IP6, 1, [for IPv6])],
                 [#include <arpa/inet.h>])
 
-if test "x$enable_nopam" = "xyes"
+if test "x$enable_pam" != "xyes" || test "x$bsd" = "xtrue"
 then
   AC_DEFINE([USE_NOPAM],1,[Disable PAM])
 fi
@@ -94,41 +145,33 @@ fi
 AS_IF( [test "x$enable_neutrinordp" = "xyes"] , [PKG_CHECK_MODULES(FREERDP, freerdp >= 1.0.0)] )
 
 # checking for libjpeg
-if ! test -z "$enable_jpeg"
+if test "x$enable_jpeg" = "xyes"
 then
   AC_CHECK_HEADER([jpeglib.h], [],
     [AC_MSG_ERROR([please install libjpeg-dev or libjpeg-devel])])
 fi
 
-if ! test -z "$enable_xrdpdebug"
+if test "x$enable_xrdpdebug" = "xyes"
 then
   CFLAGS="-g -O0"
 fi
 
 # checking for fuse
-if ! test -z "$enable_fuse"
+if test "x$enable_fuse" = "xyes"
 then
-  AC_CHECK_HEADER([fuse.h], [],
-    [AC_MSG_ERROR([please install libfuse-dev or fuse-devel])],
-    [#define _FILE_OFFSET_BITS 64])
+  PKG_CHECK_MODULES([FUSE], [fuse >= 2.6], [],
+    [AC_MSG_ERROR([please install libfuse-dev or fuse-devel])])
 fi
 
-# checking for libpulse
-if ! test -z "$enable_loadpulsemodules"
+# checking for opus
+if test "x$enable_opus" = "xyes"
 then
-  AC_CHECK_HEADER([pulse/util.h], [],
-    [AC_MSG_ERROR([please install libpulse-dev or libpulse-devel])])
-fi
-
-# checking for libpulse libpulse-simple
-if ! test -z "$enable_simplesound"
-then
-  AC_CHECK_HEADER([pulse/simple.h], [],
-    [AC_MSG_ERROR([please install libpulse-dev or libpulse-devel])])
+  AC_CHECK_HEADER([opus/opus.h], [],
+    [AC_MSG_ERROR([please install libopus-dev or opus-devel])])
 fi
 
 # checking for TurboJPEG
-if ! test -z "$enable_tjpeg"
+if test "x$enable_tjpeg" = "xyes"
 then
 if test ! -z "$TURBOJPEG_PATH"
 then
@@ -192,7 +235,9 @@ AC_CONFIG_FILES([Makefile
                  instfiles/Makefile
                  instfiles/pam.d/Makefile
                  instfiles/init.d/Makefile
+                 instfiles/rc.d/Makefile
                  instfiles/default/Makefile
+                 instfiles/pulse/Makefile
                  genkeymap/Makefile
                  xrdpapi/Makefile
                  xrdpvr/Makefile
