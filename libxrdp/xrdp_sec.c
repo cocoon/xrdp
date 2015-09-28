@@ -26,6 +26,8 @@
     do { if (_level < LOG_LEVEL) { g_write _args ; } } while (0)
 #define LLOGLN(_level, _args) \
     do { if (_level < LOG_LEVEL) { g_writeln _args ; } } while (0)
+#define LHEXDUMP(_level, _args) \
+    do { if (_level < LOG_LEVEL) { g_hexdump _args ; } } while (0)
 
 /* some compilers need unsigned char to avoid warnings */
 static tui8 g_pad_54[40] =
@@ -219,61 +221,227 @@ hex_str_to_bin(char *in, char *out, int out_len)
 }
 
 /*****************************************************************************/
+static void APP_CC
+xrdp_load_keyboard_layout(struct xrdp_client_info *client_info)
+{
+    int fd;
+    int index = 0;
+    int bytes;
+    struct list *names = (struct list *)NULL;
+    struct list *items = (struct list *)NULL;
+    struct list *values = (struct list *)NULL;
+    char *item = (char *)NULL;
+    char *value = (char *)NULL;
+    char *q = (char *)NULL;
+    char keyboard_cfg_file[256] = { 0 };
+    char rdp_layout[256] = { 0 };
+
+    LLOGLN(0, ("xrdp_load_keyboard_layout:"));
+    /* infer model/variant */
+    /* TODO specify different X11 keyboard models/variants */
+    g_memset(client_info->model, 0, sizeof(client_info->model));
+    g_memset(client_info->variant, 0, sizeof(client_info->variant));
+    g_strncpy(client_info->layout, "us", sizeof(client_info->layout) - 1);
+    if (client_info->keyboard_subtype == 3)
+    {
+        /* macintosh keyboard */
+        bytes = sizeof(client_info->variant);
+        g_strncpy(client_info->variant, "mac", bytes - 1);
+    }
+    else if (client_info->keyboard_subtype == 0)
+    {
+        /* default - standard subtype */
+        client_info->keyboard_subtype = 1;
+    }
+
+    g_snprintf(keyboard_cfg_file, 255, "%s/xrdp_keyboard.ini", XRDP_CFG_PATH);
+    LLOGLN(10, ("keyboard_cfg_file %s", keyboard_cfg_file));
+
+    fd = g_file_open(keyboard_cfg_file);
+
+    if (fd > 0)
+    {
+        int section_found = -1;
+        char section_rdp_layouts[256] = { 0 };
+        char section_layouts_map[256] = { 0 };
+
+        names = list_create();
+        names->auto_free = 1;
+        items = list_create();
+        items->auto_free = 1;
+        values = list_create();
+        values->auto_free = 1;
+
+        file_read_sections(fd, names);
+        for (index = 0; index < names->count; index++)
+        {
+            q = (char *)list_get_item(names, index);
+            if (g_strncasecmp("default", q, 8) != 0)
+            {
+                int i;
+
+                file_read_section(fd, q, items, values);
+
+                for (i = 0; i < items->count; i++)
+                {
+                    item = (char *)list_get_item(items, i);
+                    value = (char *)list_get_item(values, i);
+                    LLOGLN(10, ("xrdp_load_keyboard_layout: item %s value %s",
+                           item, value));
+                    if (g_strcasecmp(item, "keyboard_type") == 0)
+                    {
+                        int v = g_atoi(value);
+                        if (v == client_info->keyboard_type)
+                        {
+                            section_found = index;
+                        }
+                    }
+                    else if (g_strcasecmp(item, "keyboard_subtype") == 0)
+                    {
+                        int v = g_atoi(value);
+                        if (v != client_info->keyboard_subtype &&
+                            section_found == index)
+                        {
+                            section_found = -1;
+                            break;
+                        }
+                    }
+                    else if (g_strcasecmp(item, "rdp_layouts") == 0)
+                    {
+                        if (section_found != -1 && section_found == index)
+                        {
+                            g_strncpy(section_rdp_layouts, value, 255);
+                        }
+                    }
+                    else if (g_strcasecmp(item, "layouts_map") == 0)
+                    {
+                        if (section_found != -1 && section_found == index)
+                        {
+                            g_strncpy(section_layouts_map, value, 255);
+                        }
+                    }
+                    else if (g_strcasecmp(item, "model") == 0)
+                    {
+                        if (section_found != -1 && section_found == index)
+                        {
+                            bytes = sizeof(client_info->model);
+                            g_memset(client_info->model, 0, bytes);
+                            g_strncpy(client_info->model, value, bytes - 1);
+                        }
+                    }
+                    else if (g_strcasecmp(item, "variant") == 0)
+                    {
+                        if (section_found != -1 && section_found == index)
+                        {
+                            bytes = sizeof(client_info->variant);
+                            g_memset(client_info->variant, 0, bytes);
+                            g_strncpy(client_info->variant, value, bytes - 1);
+                        }
+                    }
+                    else
+                    {
+                        /*
+                         * mixing items from different sections will result in
+                         * skipping over current section.
+                         */
+                        LLOGLN(10, ("xrdp_load_keyboard_layout: skipping "
+                               "configuration item - %s, continuing to next "
+                               "section", item));
+                        break;
+                    }
+                }
+
+                list_clear(items);
+                list_clear(values);
+            }
+        }
+
+        if (section_found == -1)
+        {
+            g_memset(section_rdp_layouts, 0, sizeof(char) * 256);
+            g_memset(section_layouts_map, 0, sizeof(char) * 256);
+            // read default section
+            file_read_section(fd, "default", items, values);
+            for (index = 0; index < items->count; index++)
+            {
+                item = (char *)list_get_item(items, index);
+                value = (char *)list_get_item(values, index);
+                if (g_strcasecmp(item, "rdp_layouts") == 0)
+                {
+                    g_strncpy(section_rdp_layouts, value, 255);
+                }
+                else if (g_strcasecmp(item, "layouts_map") == 0)
+                {
+                    g_strncpy(section_layouts_map, value, 255);
+                }
+            }
+            list_clear(items);
+            list_clear(values);
+        }
+
+        /* load the map */
+        file_read_section(fd, section_rdp_layouts, items, values);
+        for (index = 0; index < items->count; index++)
+        {
+            int rdp_layout_id;
+            item = (char *)list_get_item(items, index);
+            value = (char *)list_get_item(values, index);
+            rdp_layout_id = g_htoi(value);
+            if (rdp_layout_id == client_info->keylayout)
+            {
+                g_strncpy(rdp_layout, item, 255);
+                break;
+            }
+        }
+        list_clear(items);
+        list_clear(values);
+        file_read_section(fd, section_layouts_map, items, values);
+        for (index = 0; index < items->count; index++)
+        {
+            item = (char *)list_get_item(items, index);
+            value = (char *)list_get_item(values, index);
+            if (g_strcasecmp(item, rdp_layout) == 0)
+            {
+                bytes = sizeof(client_info->layout);
+                g_strncpy(client_info->layout, value, bytes - 1);
+                break;
+            }
+        }
+
+        list_delete(names);
+        list_delete(items);
+        list_delete(values);
+
+        LLOGLN(0, ("xrdp_load_keyboard_layout: model [%s] variant [%s] "
+               "layout [%s]", client_info->model, client_info->variant,
+               client_info->layout));
+        g_file_close(fd);
+    }
+    else
+    {
+        LLOGLN(0, ("xrdp_load_keyboard_layout: error opening %d",
+               keyboard_cfg_file));
+    }
+}
+
+/*****************************************************************************/
 struct xrdp_sec *APP_CC
-xrdp_sec_create(struct xrdp_rdp *owner, struct trans *trans, int crypt_level,
-                int channel_code, int multimon)
+xrdp_sec_create(struct xrdp_rdp *owner, struct trans *trans)
 {
     struct xrdp_sec *self;
 
     DEBUG((" in xrdp_sec_create"));
-    self = (struct xrdp_sec *)g_malloc(sizeof(struct xrdp_sec), 1);
+    self = (struct xrdp_sec *) g_malloc(sizeof(struct xrdp_sec), 1);
     self->rdp_layer = owner;
-    self->crypt_method = CRYPT_METHOD_NONE;
+    self->crypt_method = CRYPT_METHOD_NONE; /* set later */
     self->crypt_level = CRYPT_LEVEL_NONE;
-    switch (crypt_level)
-    {
-        case 1: /* low */
-            self->crypt_method = CRYPT_METHOD_40BIT;
-            self->crypt_level = CRYPT_LEVEL_LOW;
-            break;
-        case 2: /* medium */
-            self->crypt_method = CRYPT_METHOD_40BIT;
-            self->crypt_level = CRYPT_LEVEL_CLIENT_COMPATIBLE;
-            break;
-        case 3: /* high */
-            self->crypt_method = CRYPT_METHOD_128BIT;
-            self->crypt_level = CRYPT_LEVEL_HIGH;
-            break;
-        case 4: /* fips */
-            self->crypt_method = CRYPT_METHOD_FIPS;
-            self->crypt_level = CRYPT_LEVEL_FIPS;
-            break;
-        default:
-            g_writeln("Fatal : Illegal crypt_level");
-            break ;
-    }
-
-    self->channel_code = channel_code;
-    self->multimon = multimon;
-
-    if (self->decrypt_rc4_info != NULL)
-    {
-        g_writeln("xrdp_sec_create - decrypt_rc4_info already created !!!");
-    }
-
-    self->decrypt_rc4_info = ssl_rc4_info_create();
-
-    if (self->encrypt_rc4_info != NULL)
-    {
-        g_writeln("xrdp_sec_create - encrypt_rc4_info already created !!!");
-    }
-
-    self->encrypt_rc4_info = ssl_rc4_info_create();
-    self->mcs_layer = xrdp_mcs_create(self, trans, &self->client_mcs_data,
-                                      &self->server_mcs_data);
+    self->mcs_layer = xrdp_mcs_create(self, trans, &(self->client_mcs_data),
+                                      &(self->server_mcs_data));
     self->fastpath_layer = xrdp_fastpath_create(self, trans);
     self->chan_layer = xrdp_channel_create(self, self->mcs_layer);
+    self->is_security_header_present = 1;
     DEBUG((" out xrdp_sec_create"));
+
     return self;
 }
 
@@ -283,7 +451,7 @@ xrdp_sec_delete(struct xrdp_sec *self)
 {
     if (self == 0)
     {
-        g_writeln("xrdp_sec_delete:  indata is null");
+        g_writeln("xrdp_sec_delete: self is null");
         return;
     }
 
@@ -312,17 +480,20 @@ xrdp_sec_init(struct xrdp_sec *self, struct stream *s)
         return 1;
     }
 
-    if (self->crypt_level == CRYPT_LEVEL_FIPS)
+    if (self->crypt_level > CRYPT_LEVEL_NONE) /* RDP encryption */
     {
-        s_push_layer(s, sec_hdr, 4 + 4 + 8);
-    }
-    else if (self->crypt_level > CRYPT_LEVEL_LOW)
-    {
-        s_push_layer(s, sec_hdr, 4 + 8);
-    }
-    else
-    {
-        s_push_layer(s, sec_hdr, 4);
+        if (self->crypt_level == CRYPT_LEVEL_FIPS)
+        {
+            s_push_layer(s, sec_hdr, 4 + 4 + 8);
+        }
+        else if (self->crypt_level > CRYPT_LEVEL_LOW)
+        {
+            s_push_layer(s, sec_hdr, 4 + 8);
+        }
+        else if (self->crypt_level)
+        {
+            s_push_layer(s, sec_hdr, 4);
+        }
     }
 
     return 0;
@@ -768,9 +939,12 @@ xrdp_sec_send_media_lic_response(struct xrdp_sec *self)
 
 /*****************************************************************************/
 static void APP_CC
-xrdp_sec_rsa_op(char *out, char *in, char *mod, char *exp)
+xrdp_sec_rsa_op(struct xrdp_sec *self, char *out, char *in, int in_bytes,
+                char *mod, char *exp)
 {
-    ssl_mod_exp(out, 64, in, 64, mod, 64, exp, 64);
+    ssl_mod_exp(out, self->rsa_key_bytes, in, in_bytes,
+                mod, self->rsa_key_bytes,
+                exp, self->rsa_key_bytes);
 }
 
 /*****************************************************************************/
@@ -1036,6 +1210,13 @@ xrdp_sec_recv(struct xrdp_sec *self, struct stream *s, int *chan)
     {
         return 1;
     }
+
+
+    if (!(self->is_security_header_present))
+    {
+        return 0;
+    }
+
     in_uint32_le(s, flags);
     DEBUG((" in xrdp_sec_recv flags $%x", flags));
 
@@ -1060,7 +1241,7 @@ xrdp_sec_recv(struct xrdp_sec *self, struct stream *s, int *chan)
             xrdp_sec_fips_decrypt(self, s->p, (int)(s->end - s->p));
             s->end -= pad;
         }
-        else
+        else if (self->crypt_level > CRYPT_LEVEL_NONE)
         {
             if (!s_check_rem(s, 8))
             {
@@ -1073,19 +1254,31 @@ xrdp_sec_recv(struct xrdp_sec *self, struct stream *s, int *chan)
 
     if (flags & SEC_CLIENT_RANDOM) /* 0x01 */
     {
-        if (!s_check_rem(s, 4 + 64))
+        if (!s_check_rem(s, 4))
         {
             return 1;
         }
         in_uint32_le(s, len);
-        in_uint8a(s, self->client_crypt_random, 64);
-        xrdp_sec_rsa_op(self->client_random, self->client_crypt_random,
-                        self->pub_mod, self->pri_exp);
+        /* 512, 2048 bit */
+        if ((len != 64 + 8) && (len != 256 + 8))
+        {
+            return 1;
+        }
+        if (!s_check_rem(s, len - 8))
+        {
+            return 1;
+        }
+        in_uint8a(s, self->client_crypt_random, len - 8);
+        xrdp_sec_rsa_op(self, self->client_random, self->client_crypt_random,
+                        len - 8, self->pub_mod, self->pri_exp);
+        LLOGLN(10, ("xrdp_sec_recv: client random - len %d", len));
+        LHEXDUMP(10, (self->client_random, 256));
+        LHEXDUMP(10, (self->client_crypt_random, len - 8));
         if (self->crypt_level == CRYPT_LEVEL_FIPS)
         {
             xrdp_sec_fips_establish_keys(self);
         }
-        else
+        else if (self->crypt_method != CRYPT_METHOD_NONE)
         {
             xrdp_sec_establish_keys(self);
         }
@@ -1131,6 +1324,13 @@ xrdp_sec_recv(struct xrdp_sec *self, struct stream *s, int *chan)
         {
             DEBUG((" out xrdp_sec_recv error"));
             return 1;
+        }
+
+        if (self->crypt_level == CRYPT_LEVEL_NONE
+                && self->crypt_method == CRYPT_METHOD_NONE)
+        {
+            /* in tls mode, no more security header from now on */
+            self->is_security_header_present = 0;
         }
 
         DEBUG((" out xrdp_sec_recv"));
@@ -1212,30 +1412,33 @@ xrdp_sec_send(struct xrdp_sec *self, struct stream *s, int chan)
     DEBUG((" in xrdp_sec_send"));
     s_pop_layer(s, sec_hdr);
 
-    if (self->crypt_level == CRYPT_LEVEL_FIPS)
+    if (self->crypt_level > CRYPT_LEVEL_NONE)
     {
-        LLOGLN(10, ("xrdp_sec_send: fips"));
-        out_uint32_le(s, SEC_ENCRYPT);
-        datalen = (int)((s->end - s->p) - 12);
-        out_uint16_le(s, 16); /* crypto header size */
-        out_uint8(s, 1); /* fips version */
-        pad = (8 - (datalen % 8)) & 7;
-        g_memset(s->end, 0, pad);
-        s->end += pad;
-        out_uint8(s, pad); /* fips pad */
-        xrdp_sec_fips_sign(self, s->p, 8, s->p + 8, datalen);
-        xrdp_sec_fips_encrypt(self, s->p + 8, datalen + pad);
-    }
-    else if (self->crypt_level > CRYPT_LEVEL_LOW)
-    {
-        out_uint32_le(s, SEC_ENCRYPT);
-        datalen = (int)((s->end - s->p) - 8);
-        xrdp_sec_sign(self, s->p, 8, s->p + 8, datalen);
-        xrdp_sec_encrypt(self, s->p + 8, datalen);
-    }
-    else
-    {
-        out_uint32_le(s, 0);
+        if (self->crypt_level == CRYPT_LEVEL_FIPS)
+        {
+            LLOGLN(10, ("xrdp_sec_send: fips"));
+            out_uint32_le(s, SEC_ENCRYPT);
+            datalen = (int)((s->end - s->p) - 12);
+            out_uint16_le(s, 16); /* crypto header size */
+            out_uint8(s, 1); /* fips version */
+            pad = (8 - (datalen % 8)) & 7;
+            g_memset(s->end, 0, pad);
+            s->end += pad;
+            out_uint8(s, pad); /* fips pad */
+            xrdp_sec_fips_sign(self, s->p, 8, s->p + 8, datalen);
+            xrdp_sec_fips_encrypt(self, s->p + 8, datalen + pad);
+        }
+        else if (self->crypt_level > CRYPT_LEVEL_LOW)
+        {
+            out_uint32_le(s, SEC_ENCRYPT);
+            datalen = (int)((s->end - s->p) - 8);
+            xrdp_sec_sign(self, s->p, 8, s->p + 8, datalen);
+            xrdp_sec_encrypt(self, s->p + 8, datalen);
+        }
+        else
+        {
+            out_uint32_le(s, 0);
+        }
     }
 
     if (xrdp_mcs_send(self->mcs_layer, s, chan) != 0)
@@ -1583,10 +1786,23 @@ xrdp_sec_process_mcs_data_CS_SECURITY(struct xrdp_sec *self, struct stream* s)
             found = 1;
         }
     }
-    if (found == 0)
+    if ((found == 0) &&
+        (self->crypt_level == CRYPT_LEVEL_NONE))
     {
-        g_writeln("  no security");
+        if (crypt_method == CRYPT_METHOD_NONE)
+        {
+            g_writeln("  client and server support none crypt, using "
+                      "none crypt");
+            self->crypt_method = CRYPT_METHOD_NONE;
+            self->crypt_level = CRYPT_LEVEL_NONE;
+            found = 1;
+        }
     }
+//    if (found == 0)
+//    {
+//        g_writeln("  can not find client / server agreed encryption method");
+//        return 1;
+//    }
     return 0;
 }
 
@@ -1599,11 +1815,15 @@ xrdp_sec_process_mcs_data_channels(struct xrdp_sec *self, struct stream *s)
     int num_channels;
     int index;
     struct mcs_channel_item *channel_item;
+    struct xrdp_client_info *client_info = (struct xrdp_client_info *)NULL;
 
-    DEBUG(("processing channels, channel_code is %d", self->channel_code));
+    client_info = &(self->rdp_layer->client_info);
+
+
+    DEBUG(("processing channels, channel_code is %d", client_info->channel_code));
 
     /* this is an option set in xrdp.ini */
-    if (self->channel_code != 1) /* are channels on? */
+    if (client_info->channel_code != 1) /* are channels on? */
     {
         g_writeln("Processing channel data from client - The channel is off");
         return 0;
@@ -1623,16 +1843,19 @@ xrdp_sec_process_mcs_data_channels(struct xrdp_sec *self, struct stream *s)
 
     for (index = 0; index < num_channels; index++)
     {
+        struct mcs_channel_item *channel_item;
+
         channel_item = (struct mcs_channel_item *)
                        g_malloc(sizeof(struct mcs_channel_item), 1);
         if (!s_check_rem(s, 12))
         {
+            g_free(channel_item);
             return 1;
         }
         in_uint8a(s, channel_item->name, 8);
         in_uint32_le(s, channel_item->flags);
         channel_item->chanid = MCS_GLOBAL_CHANNEL + (index + 1);
-        list_add_item(self->mcs_layer->channel_list, (tintptr)channel_item);
+        list_add_item(self->mcs_layer->channel_list, (tintptr) channel_item);
         DEBUG(("got channel flags %8.8x name %s", channel_item->flags,
                channel_item->name));
     }
@@ -1648,13 +1871,17 @@ xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
     int index;
     int monitorCount;
     int flags;
+    int x1;
+    int y1;
+    int x2;
+    int y2;
     struct xrdp_client_info *client_info = (struct xrdp_client_info *)NULL;
 
     client_info = &(self->rdp_layer->client_info);
 
-    DEBUG(("processing monitors data, allow_multimon is %d", self->multimon));
+    DEBUG(("processing monitors data, allow_multimon is %d", client_info->multimon));
     /* this is an option set in xrdp.ini */
-    if (self->multimon != 1) /* are multi-monitors allowed ? */
+    if (client_info->multimon != 1) /* are multi-monitors allowed ? */
     {
         DEBUG(("[INFO] xrdp_sec_process_mcs_data_monitors: multimon is not "
                "allowed, skipping"));
@@ -1681,6 +1908,10 @@ xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
 
     client_info->monitorCount = monitorCount;
 
+    x1 = 0;
+    y1 = 0;
+    x2 = 0;
+    y2 = 0;
     /* Add client_monitor_data to client_info struct, will later pass to X11rdp */
     for (index = 0; index < monitorCount; index++)
     {
@@ -1689,10 +1920,31 @@ xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
         in_uint32_le(s, client_info->minfo[index].right);
         in_uint32_le(s, client_info->minfo[index].bottom);
         in_uint32_le(s, client_info->minfo[index].is_primary);
+        if (index == 0)
+        {
+            x1 = client_info->minfo[index].left;
+            y1 = client_info->minfo[index].top;
+            x2 = client_info->minfo[index].right;
+            y2 = client_info->minfo[index].bottom;
+        }
+        else
+        {
+            x1 = MIN(x1, client_info->minfo[index].left);
+            y1 = MIN(y1, client_info->minfo[index].top);
+            x2 = MAX(x2, client_info->minfo[index].right);
+            y2 = MAX(y2, client_info->minfo[index].bottom);
+        }
 
         g_writeln("got a monitor: left= %d, top= %d, right= %d, bottom= %d, is_primary?= %d", client_info->minfo[index].left,
             client_info->minfo[index].top, client_info->minfo[index].right, client_info->minfo[index].bottom, client_info->minfo[index].is_primary);
     }
+
+    if ((x2 > x1) && (y2 > y1))
+    {
+        client_info->width = (x2 - x1) + 1;
+        client_info->height = (y2 - y1) + 1;
+    }
+
     return 0;
 }
 
@@ -1796,113 +2048,6 @@ xrdp_sec_process_mcs_data(struct xrdp_sec *self)
 }
 
 /*****************************************************************************/
-/* prepare server mcs data to send in mcs layer */
-int APP_CC
-xrdp_sec_out_mcs_data(struct xrdp_sec *self)
-{
-    struct stream *s;
-    int num_channels_even;
-    int num_channels;
-    int index;
-    int channel;
-
-    num_channels = self->mcs_layer->channel_list->count;
-    num_channels_even = num_channels + (num_channels & 1);
-    s = &self->server_mcs_data;
-    init_stream(s, 512);
-    out_uint16_be(s, 5);
-    out_uint16_be(s, 0x14);
-    out_uint8(s, 0x7c);
-    out_uint16_be(s, 1);
-    out_uint8(s, 0x2a);
-    out_uint8(s, 0x14);
-    out_uint8(s, 0x76);
-    out_uint8(s, 0x0a);
-    out_uint8(s, 1);
-    out_uint8(s, 1);
-    out_uint8(s, 0);
-    out_uint16_le(s, 0xc001);
-    out_uint8(s, 0);
-    out_uint8(s, 0x4d); /* M */
-    out_uint8(s, 0x63); /* c */
-    out_uint8(s, 0x44); /* D */
-    out_uint8(s, 0x6e); /* n */
-    if (self->mcs_layer->iso_layer->selectedProtocol != -1)
-    { // Check for RDPNEGDATA availability
-        out_uint16_be(s, 0x80fc + (num_channels_even * 2) + 4);
-    }
-    else
-    {
-        out_uint16_be(s, 0x80fc + (num_channels_even * 2));
-    }
-    out_uint16_le(s, SEC_TAG_SRV_INFO);
-    if (self->mcs_layer->iso_layer->selectedProtocol != -1)
-    {
-        out_uint16_le(s, 12); /* len */
-    }
-    else
-    {
-        out_uint16_le(s, 8); /* len */
-    }
-    out_uint8(s, 4); /* 4 = rdp5 1 = rdp4 */
-    out_uint8(s, 0);
-    out_uint8(s, 8);
-    out_uint8(s, 0);
-    if (self->mcs_layer->iso_layer->selectedProtocol != -1)
-    {
-         /* clientReqeustedProtocol */
-        out_uint32_le(s, self->mcs_layer->iso_layer->selectedProtocol);
-    }
-    out_uint16_le(s, SEC_TAG_SRV_CHANNELS);
-    out_uint16_le(s, 8 + (num_channels_even * 2)); /* len */
-    out_uint16_le(s, MCS_GLOBAL_CHANNEL); /* 1003, 0x03eb main channel */
-    out_uint16_le(s, num_channels); /* number of other channels */
-
-    for (index = 0; index < num_channels_even; index++)
-    {
-        if (index < num_channels)
-        {
-            channel = MCS_GLOBAL_CHANNEL + (index + 1);
-            out_uint16_le(s, channel);
-        }
-        else
-        {
-            out_uint16_le(s, 0);
-        }
-    }
-
-    out_uint16_le(s, SEC_TAG_SRV_CRYPT);
-    out_uint16_le(s, 0x00ec); /* len is 236 */
-    out_uint32_le(s, self->crypt_method);
-    out_uint32_le(s, self->crypt_level);
-    out_uint32_le(s, 32);     /* 32 bytes random len */
-    out_uint32_le(s, 0xb8);   /* 184 bytes rsa info(certificate) len */
-    out_uint8a(s, self->server_random, 32);
-    /* here to end is certificate */
-    /* HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\ */
-    /* TermService\Parameters\Certificate */
-    out_uint32_le(s, 1);
-    out_uint32_le(s, 1);
-    out_uint32_le(s, 1);
-    out_uint16_le(s, SEC_TAG_PUBKEY);
-    out_uint16_le(s, 0x005c); /* 92 bytes length of SEC_TAG_PUBKEY */
-    out_uint32_le(s, SEC_RSA_MAGIC);
-    out_uint32_le(s, 0x48); /* 72 bytes modulus len */
-    out_uint32_be(s, 0x00020000);
-    out_uint32_be(s, 0x3f000000);
-    out_uint8a(s, self->pub_exp, 4); /* pub exp */
-    out_uint8a(s, self->pub_mod, 64); /* pub mod */
-    out_uint8s(s, 8); /* pad */
-    out_uint16_le(s, SEC_TAG_KEYSIG);
-    out_uint16_le(s, 72); /* len */
-    out_uint8a(s, self->pub_sig, 64); /* pub sig */
-    out_uint8s(s, 8); /* pad */
-    /* end certificate */
-    s_mark_end(s);
-    return 0;
-}
-
-/*****************************************************************************/
 /* process the mcs client data we received from the mcs layer */
 static int APP_CC
 xrdp_sec_in_mcs_data(struct xrdp_sec *self)
@@ -1961,7 +2106,61 @@ xrdp_sec_in_mcs_data(struct xrdp_sec *self)
     in_uint8s(s, 79);
     in_uint32_le(s, client_info->keyboard_type);
     in_uint32_le(s, client_info->keyboard_subtype);
+    xrdp_load_keyboard_layout(client_info);
     s->p = s->data;
+    return 0;
+}
+
+/*****************************************************************************/
+/* returns error */
+int APP_CC
+xrdp_sec_init_rdp_security(struct xrdp_sec *self)
+{
+    switch (self->rdp_layer->client_info.crypt_level)
+    {
+        case 0: /* none */
+            self->crypt_method = CRYPT_METHOD_NONE;
+            self->crypt_level = CRYPT_LEVEL_NONE;
+            break;
+        case 1: /* low */
+            self->crypt_method = CRYPT_METHOD_40BIT;
+            self->crypt_level = CRYPT_LEVEL_LOW;
+            break;
+        case 2: /* medium */
+            self->crypt_method = CRYPT_METHOD_40BIT;
+            self->crypt_level = CRYPT_LEVEL_CLIENT_COMPATIBLE;
+            break;
+        case 3: /* high */
+            self->crypt_method = CRYPT_METHOD_128BIT;
+            self->crypt_level = CRYPT_LEVEL_HIGH;
+            break;
+        case 4: /* fips */
+            self->crypt_method = CRYPT_METHOD_FIPS;
+            self->crypt_level = CRYPT_LEVEL_FIPS;
+            break;
+        default:
+            g_writeln("Fatal : Illegal crypt_level");
+            break ;
+    }
+
+    if (self->decrypt_rc4_info != NULL)
+    {
+        g_writeln("xrdp_sec_init_rdp_security: decrypt_rc4_info already created !!!");
+    }
+    else
+    {
+        self->decrypt_rc4_info = ssl_rc4_info_create();
+    }
+
+    if (self->encrypt_rc4_info != NULL)
+    {
+        g_writeln("xrdp_sec_init_rdp_security: encrypt_rc4_info already created !!!");
+    }
+    else
+    {
+        self->encrypt_rc4_info = ssl_rc4_info_create();
+    }
+
     return 0;
 }
 
@@ -1971,57 +2170,102 @@ xrdp_sec_incoming(struct xrdp_sec *self)
 {
     struct list *items = NULL;
     struct list *values = NULL;
+    struct xrdp_iso *iso;
     int index = 0;
     char *item = NULL;
     char *value = NULL;
     char key_file[256];
 
-    LLOGLN(10, ("xrdp_sec_incoming:"));
-    g_memset(key_file, 0, sizeof(char) * 256);
-    DEBUG((" in xrdp_sec_incoming"));
-    g_random(self->server_random, 32);
-    items = list_create();
-    items->auto_free = 1;
-    values = list_create();
-    values->auto_free = 1;
-    g_snprintf(key_file, 255, "%s/rsakeys.ini", XRDP_CFG_PATH);
+    DEBUG((" in xrdp_sec_incoming:"));
+    iso = self->mcs_layer->iso_layer;
 
-    if (file_by_name_read_section(key_file, "keys", items, values) != 0)
+    /* negotiate security layer */
+    if (xrdp_iso_incoming(iso) != 0)
     {
-        /* this is a show stopper */
-        log_message(LOG_LEVEL_ALWAYS, "XRDP cannot read file: %s "
-                    "(check permissions)", key_file);
-        list_delete(items);
-        list_delete(values);
+        DEBUG(("xrdp_sec_incoming: xrdp_iso_incoming failed"));
         return 1;
     }
 
-    for (index = 0; index < items->count; index++)
+    /* initialize selected security layer */
+    if (iso->selectedProtocol > PROTOCOL_RDP)
     {
-        item = (char *)list_get_item(items, index);
-        value = (char *)list_get_item(values, index);
+        /* init tls security */
+        DEBUG((" in xrdp_sec_incoming: init tls security"));
 
-        if (g_strcasecmp(item, "pub_exp") == 0)
+        if (trans_set_tls_mode(self->mcs_layer->iso_layer->trans,
+                self->rdp_layer->client_info.key_file,
+                self->rdp_layer->client_info.certificate) != 0)
         {
-            hex_str_to_bin(value, self->pub_exp, 4);
+            g_writeln("xrdp_sec_incoming: trans_set_tls_mode failed");
+            return 1;
         }
-        else if (g_strcasecmp(item, "pub_mod") == 0)
+
+        self->crypt_level = CRYPT_LEVEL_NONE;
+        self->crypt_method = CRYPT_METHOD_NONE;
+        self->rsa_key_bytes = 0;
+
+    }
+    else
+    {
+        /* init rdp security */
+        DEBUG((" in xrdp_sec_incoming: init rdp security"));
+        if (xrdp_sec_init_rdp_security(self) != 0)
         {
-            hex_str_to_bin(value, self->pub_mod, 64);
+            DEBUG(("xrdp_sec_incoming: xrdp_sec_init_rdp_security failed"));
+            return 1;
         }
-        else if (g_strcasecmp(item, "pub_sig") == 0)
+        if (self->crypt_method != CRYPT_METHOD_NONE)
         {
-            hex_str_to_bin(value, self->pub_sig, 64);
-        }
-        else if (g_strcasecmp(item, "pri_exp") == 0)
-        {
-            hex_str_to_bin(value, self->pri_exp, 64);
+            g_memset(key_file, 0, sizeof(char) * 256);
+            g_random(self->server_random, 32);
+            items = list_create();
+            items->auto_free = 1;
+            values = list_create();
+            values->auto_free = 1;
+            g_snprintf(key_file, 255, "%s/rsakeys.ini", XRDP_CFG_PATH);
+
+            if (file_by_name_read_section(key_file, "keys", items, values) != 0)
+            {
+                /* this is a show stopper */
+                log_message(LOG_LEVEL_ALWAYS, "XRDP cannot read file: %s "
+                            "(check permissions)", key_file);
+                list_delete(items);
+                list_delete(values);
+                return 1;
+            }
+
+            for (index = 0; index < items->count; index++)
+            {
+                item = (char *)list_get_item(items, index);
+                value = (char *)list_get_item(values, index);
+
+                if (g_strcasecmp(item, "pub_exp") == 0)
+                {
+                    hex_str_to_bin(value, self->pub_exp, 4);
+                }
+                else if (g_strcasecmp(item, "pub_mod") == 0)
+                {
+                    self->rsa_key_bytes = (g_strlen(value) + 1) / 5;
+                    g_writeln("pub_mod bytes %d", self->rsa_key_bytes);
+                    hex_str_to_bin(value, self->pub_mod, self->rsa_key_bytes);
+                }
+                else if (g_strcasecmp(item, "pub_sig") == 0)
+                {
+                    hex_str_to_bin(value, self->pub_sig, 64);
+                }
+                else if (g_strcasecmp(item, "pri_exp") == 0)
+                {
+                    self->rsa_key_bytes = (g_strlen(value) + 1) / 5;
+                    g_writeln("pri_exp %d", self->rsa_key_bytes);
+                    hex_str_to_bin(value, self->pri_exp, self->rsa_key_bytes);
+                }
+            }
+            list_delete(items);
+            list_delete(values);
         }
     }
 
-    list_delete(items);
-    list_delete(values);
-
+    /* negotiate mcs layer */
     if (xrdp_mcs_incoming(self->mcs_layer) != 0)
     {
         return 1;
@@ -2040,6 +2284,7 @@ xrdp_sec_incoming(struct xrdp_sec *self)
     {
         return 1;
     }
+
     LLOGLN(10, ("xrdp_sec_incoming: out"));
     return 0;
 }

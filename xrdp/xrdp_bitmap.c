@@ -149,15 +149,44 @@ xrdp_bitmap_create_with_data(int width, int height,
                              struct xrdp_wm *wm)
 {
     struct xrdp_bitmap *self = (struct xrdp_bitmap *)NULL;
+#if defined(NEED_ALIGN)
+    tintptr data_as_int;
+    int Bpp;
+#endif
 
     self = (struct xrdp_bitmap *)g_malloc(sizeof(struct xrdp_bitmap), 1);
     self->type = WND_TYPE_BITMAP;
     self->width = width;
     self->height = height;
     self->bpp = bpp;
-    self->data = data;
-    self->do_not_free_data = 1;
     self->wm = wm;
+#if defined(NEED_ALIGN)
+    data_as_int = (tintptr) data;
+    if (((bpp >= 24) && (data_as_int & 3)) ||
+        (((bpp == 15) || (bpp == 16)) && (data_as_int & 1)))
+    {
+        /* got to copy data here, it's not alligned
+           other calls in this file assume alignment */
+        Bpp = 4;
+        switch (bpp)
+        {
+            case 8:
+                Bpp = 1;
+                break;
+            case 15:
+                Bpp = 2;
+                break;
+            case 16:
+                Bpp = 2;
+                break;
+        }
+        self->data = (char *)g_malloc(width * height * Bpp, 0);
+        g_memcpy(self->data, data, width * height * Bpp);
+        return self;
+    }
+#endif
+    self->data = data; 
+    self->do_not_free_data = 1;
     return self;
 }
 
@@ -413,7 +442,6 @@ xrdp_bitmap_load(struct xrdp_bitmap *self, const char *filename, int *palette)
         return 1;
     }
 
-    s = (struct stream *)NULL;
     fd = g_file_open(filename);
 
     if (fd != -1)
@@ -441,7 +469,14 @@ xrdp_bitmap_load(struct xrdp_bitmap *self, const char *filename, int *palette)
         g_file_read(fd, s->data, 4);
         in_uint32_le(s, size);
         /* read bmp header */
-        g_file_seek(fd, 14);
+        if (g_file_seek(fd, 14) < 0)
+        {
+            log_message(LOG_LEVEL_ERROR, "xrdp_bitmap_load: seek error in file %s\n",
+                filename);
+            free_stream(s);
+            g_file_close(fd);
+            return 1;
+        }
         init_stream(s, 8192);
         g_file_read(fd, s->data, 40); /* size better be 40 */
         in_uint32_le(s, header.size);
@@ -468,7 +503,11 @@ xrdp_bitmap_load(struct xrdp_bitmap *self, const char *filename, int *palette)
 
         if (header.bit_count == 24) /* 24 bit bitmap */
         {
-            g_file_seek(fd, 14 + header.size);
+            if (g_file_seek(fd, 14 + header.size) < 0)
+            {
+                log_message(LOG_LEVEL_ERROR, "xrdp_bitmap_load: seek error in file %s\n",
+                    filename);
+            }
             xrdp_bitmap_resize(self, header.image_width, header.image_height);
             size = header.image_width * header.image_height * 3;
             init_stream(s, size);
@@ -521,7 +560,11 @@ xrdp_bitmap_load(struct xrdp_bitmap *self, const char *filename, int *palette)
         else if (header.bit_count == 8) /* 8 bit bitmap */
         {
             /* read palette */
-            g_file_seek(fd, 14 + header.size);
+            if (g_file_seek(fd, 14 + header.size) < 0)
+            {
+                log_message(LOG_LEVEL_ERROR, "xrdp_bitmap_load: seek error in file %s\n",
+                    filename);
+            }
             init_stream(s, 8192);
             g_file_read(fd, s->data, header.clr_used * sizeof(int));
 
@@ -578,7 +621,11 @@ xrdp_bitmap_load(struct xrdp_bitmap *self, const char *filename, int *palette)
         else if (header.bit_count == 4) /* 4 bit bitmap */
         {
             /* read palette */
-            g_file_seek(fd, 14 + header.size);
+            if (g_file_seek(fd, 14 + header.size) < 0)
+            {
+                log_message(LOG_LEVEL_ERROR, "xrdp_bitmap_load: seek error in file %s\n",
+                    filename);
+            }
             init_stream(s, 8192);
             g_file_read(fd, s->data, header.clr_used * sizeof(int));
 
@@ -679,7 +726,7 @@ xrdp_bitmap_get_pixel(struct xrdp_bitmap *self, int x, int y)
         {
             return GETPIXEL16(self->data, x, y, self->width);
         }
-        else if (self->bpp == 24)
+        else if (self->bpp >= 24)
         {
             return GETPIXEL32(self->data, x, y, self->width);
         }
@@ -712,7 +759,7 @@ xrdp_bitmap_set_pixel(struct xrdp_bitmap *self, int x, int y, int pixel)
         {
             SETPIXEL16(self->data, x, y, self->width, pixel);
         }
-        else if (self->bpp == 24)
+        else if (self->bpp >= 24)
         {
             SETPIXEL32(self->data, x, y, self->width, pixel);
         }
@@ -779,7 +826,7 @@ xrdp_bitmap_copy_box(struct xrdp_bitmap *self,
         return 1;
     }
 
-    if (self->bpp == 24)
+    if (self->bpp >= 24)
     {
         s32 = ((tui32 *)(self->data)) + (self->width * y + x);
         d32 = ((tui32 *)(dest->data)) + (dest->width * desty + destx);
@@ -849,7 +896,7 @@ xrdp_bitmap_hash_crc(struct xrdp_bitmap *self)
     int index;
     char hash_data[16];
 
-    if (self->bpp == 24)
+    if (self->bpp >= 24)
     {
         bytes = self->width * self->height * 4;
     }
@@ -953,7 +1000,76 @@ xrdp_bitmap_copy_box_with_crc(struct xrdp_bitmap *self,
     CRC_PASS(self->height, crc);
     CRC_PASS(self->height >> 8, crc);
 
-    if (self->bpp == 24)
+    if (self->bpp == 32)
+    {
+        s32 = ((tui32 *)(self->data)) + (self->width * y + x);
+        d32 = ((tui32 *)(dest->data)) + (dest->width * desty + destx);
+        incs = self->width - cx;
+        incd = dest->width - cx;
+
+        for (i = 0; i < cy; i++)
+        {
+            j = 0;
+
+            while (j < cx - 4)
+            {
+                pixel = *s32;
+                *d32 = pixel;
+                CRC_PASS(pixel, crc);
+                CRC_PASS(pixel >> 8, crc);
+                CRC_PASS(pixel >> 16, crc);
+                CRC_PASS(pixel >> 24, crc);
+                s32++;
+                d32++;
+
+                pixel = *s32;
+                *d32 = pixel;
+                CRC_PASS(pixel, crc);
+                CRC_PASS(pixel >> 8, crc);
+                CRC_PASS(pixel >> 16, crc);
+                CRC_PASS(pixel >> 24, crc);
+                s32++;
+                d32++;
+
+                pixel = *s32;
+                *d32 = pixel;
+                CRC_PASS(pixel, crc);
+                CRC_PASS(pixel >> 8, crc);
+                CRC_PASS(pixel >> 16, crc);
+                CRC_PASS(pixel >> 24, crc);
+                s32++;
+                d32++;
+
+                pixel = *s32;
+                *d32 = pixel;
+                CRC_PASS(pixel, crc);
+                CRC_PASS(pixel >> 8, crc);
+                CRC_PASS(pixel >> 16, crc);
+                CRC_PASS(pixel >> 24, crc);
+                s32++;
+                d32++;
+
+                j += 4;
+            }
+            while (j < cx)
+            {
+                pixel = *s32;
+                *d32 = pixel;
+                CRC_PASS(pixel, crc);
+                CRC_PASS(pixel >> 8, crc);
+                CRC_PASS(pixel >> 16, crc);
+                CRC_PASS(pixel >> 24, crc);
+                s32++;
+                d32++;
+
+                j += 1;
+            }
+
+            s32 += incs;
+            d32 += incd;
+        }
+    }
+    else if (self->bpp == 24)
     {
         s32 = ((tui32 *)(self->data)) + (self->width * y + x);
         d32 = ((tui32 *)(dest->data)) + (dest->width * desty + destx);
@@ -1677,42 +1793,6 @@ xrdp_bitmap_def_proc(struct xrdp_bitmap *self, int msg,
                 if (self->child_list != 0)
                 {
                     i = list_index_of(self->child_list, (long)self->focused_control);
-                }
-
-                if (shift)
-                {
-                    i--;
-
-                    if (i < 0)
-                    {
-                        i = self->child_list->count - 1;
-                    }
-                }
-                else
-                {
-                    i++;
-
-                    if (i >= self->child_list->count)
-                    {
-                        i = 0;
-                    }
-                }
-
-                n = self->child_list->count;
-                b = (struct xrdp_bitmap *)list_get_item(self->child_list, i);
-
-                while (b != self->focused_control && b != 0 && n > 0)
-                {
-                    n--;
-
-                    if (b->tab_stop)
-                    {
-                        focus_out_control = self->focused_control;
-                        self->focused_control = b;
-                        xrdp_bitmap_invalidate(focus_out_control, 0);
-                        xrdp_bitmap_invalidate(b, 0);
-                        break;
-                    }
 
                     if (shift)
                     {
@@ -1733,7 +1813,43 @@ xrdp_bitmap_def_proc(struct xrdp_bitmap *self, int msg,
                         }
                     }
 
+                    n = self->child_list->count;
                     b = (struct xrdp_bitmap *)list_get_item(self->child_list, i);
+
+                    while (b != self->focused_control && b != 0 && n > 0)
+                    {
+                        n--;
+
+                        if (b->tab_stop)
+                        {
+                            focus_out_control = self->focused_control;
+                            self->focused_control = b;
+                            xrdp_bitmap_invalidate(focus_out_control, 0);
+                            xrdp_bitmap_invalidate(b, 0);
+                            break;
+                        }
+
+                        if (shift)
+                        {
+                            i--;
+
+                            if (i < 0)
+                            {
+                                i = self->child_list->count - 1;
+                            }
+                        }
+                        else
+                        {
+                            i++;
+
+                            if (i >= self->child_list->count)
+                            {
+                                i = 0;
+                            }
+                        }
+
+                        b = (struct xrdp_bitmap *)list_get_item(self->child_list, i);
+                    }
                 }
             }
             else if (scan_code == 28) /* enter */

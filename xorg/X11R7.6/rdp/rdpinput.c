@@ -59,6 +59,8 @@ extern int g_alt_down; /* in rdpmain.c */
 extern int g_ctrl_down; /* in rdpmain.c */
 
 static int g_old_button_mask = 0;
+static int g_old_x = 0;
+static int g_old_y = 0;
 /* this is toggled every time num lock key is released, not like the
    above *_down vars */
 static int g_scroll_lock_down = 0;
@@ -68,7 +70,7 @@ static int g_x = 0;
 static int g_y = 0;
 static int g_timer_schedualed = 0;
 static int g_delay_motion = 1; /* turn on or off */
-static int g_use_evdev = 1;
+static int g_use_evdev = 0;
 
 /* Copied from Xvnc/lib/font/util/utilbitmap.c */
 static unsigned char g_reverse_byte[0x100] =
@@ -282,7 +284,7 @@ rdpChangeKeyboardControl(DeviceIntPtr pDev, KeybdCtrl *ctrl)
 
 /******************************************************************************/
 int
-rdpLoadLayout(int keylayout)
+rdpLoadLayout(struct xrdp_client_info *client_info)
 {
     XkbRMLVOSet set;
     XkbSrvInfoPtr xkbi;
@@ -292,8 +294,10 @@ rdpLoadLayout(int keylayout)
     KeyCode first_key;
     CARD8 num_keys;
 
-    LLOGLN(0, ("rdpLoadLayout: keylayout 0x%8.8x display %s",
-           keylayout, display));
+    int keylayout = client_info->keylayout;
+
+    LLOGLN(0, ("rdpLoadLayout: keylayout 0x%8.8x variant %s display %s",
+               keylayout, client_info->variant, display));
     memset(&set, 0, sizeof(set));
     if (g_use_evdev)
     {
@@ -303,42 +307,26 @@ rdpLoadLayout(int keylayout)
     {
         set.rules = "base";
     }
-    set.model = "pc104";
+
+    set.model = "pc105";
     set.layout = "us";
-    switch (keylayout)
-    {
-        case 0x00000407: /* German */
-            set.layout = "de";
-            break;
-        case 0x00000409: /* US */
-            set.layout = "us";
-            break;
-        case 0x0000040C: /* French */
-            set.layout = "fr";
-            break;
-        case 0x00000410: /* Italian */
-            set.layout = "it";
-            break;
-        case 0x00000416: /* Portuguese (Brazilian ABNT) */
-            set.model = "abnt2";
-            set.layout = "br";
-            break;
-        case 0x00000419: /* Russian */
-            set.layout = "ru";
-            break;
-        case 0x0000041D: /* Swedish */
-            set.layout = "se";
-            break;
-        case 0x00000816: /* Portuguese */
-            set.layout = "pt";
-            break;
-        default:
-            LLOGLN(0, ("rdpLoadLayout: unknown keylayout 0x%8.8x", keylayout));
-            break;
-    }
     set.variant = "";
     set.options = "";
 
+    if (strlen(client_info->model) > 0)
+    {
+        set.model = client_info->model;
+    }
+    if (strlen(client_info->variant) > 0)
+    {
+        set.variant = client_info->variant;
+    }
+    if (strlen(client_info->layout) > 0)
+    {
+        set.layout = client_info->layout;
+    }
+
+ retry:
     /* free some stuff so we can call InitKeyboardDeviceStruct again */
     xkbi = g_keyboard->key->xkbInfo;
     xkb = xkbi->desc;
@@ -355,21 +343,31 @@ rdpLoadLayout(int keylayout)
                                   rdpChangeKeyboardControl))
     {
         LLOGLN(0, ("rdpLoadLayout: InitKeyboardDeviceStruct failed"));
+        return 1;
     }
 
     /* notify the X11 clients eg. X_ChangeKeyboardMapping */
     keySyms = XkbGetCoreMap(g_keyboard);
-    first_key = keySyms->minKeyCode;
-    num_keys = (keySyms->maxKeyCode - keySyms->minKeyCode) + 1;
-    XkbApplyMappingChange(g_keyboard, keySyms, first_key, num_keys,
-                          NULL, serverClient);
-    for (pDev = inputInfo.devices; pDev; pDev = pDev->next)
+    if (keySyms)
     {
-        if ((pDev->coreEvents || pDev == inputInfo.keyboard) && pDev->key)
+        first_key = keySyms->minKeyCode;
+        num_keys = (keySyms->maxKeyCode - keySyms->minKeyCode) + 1;
+        XkbApplyMappingChange(g_keyboard, keySyms, first_key, num_keys,
+                              NULL, serverClient);
+        for (pDev = inputInfo.devices; pDev; pDev = pDev->next)
         {
-            XkbApplyMappingChange(pDev, keySyms, first_key, num_keys,
-                                  NULL, serverClient);
+            if ((pDev->coreEvents || pDev == inputInfo.keyboard) && pDev->key)
+            {
+                XkbApplyMappingChange(pDev, keySyms, first_key, num_keys,
+                                      NULL, serverClient);
+            }
         }
+    }
+    else
+    {
+        /* sometimes, variant doesn't support all layouts */
+        set.variant = "";
+        goto retry;
     }
 
     return 0;
@@ -399,7 +397,7 @@ rdpKeybdProc(DeviceIntPtr pDevice, int onoff)
             {
                 set.rules = "base";
             }
-            set.model = "pc104";
+            set.model = "pc105";
             set.layout = "us";
             set.variant = "";
             set.options = "";
@@ -862,7 +860,12 @@ rdpDeferredInputCallback(OsTimerPtr timer, CARD32 now, pointer arg)
 {
     LLOGLN(10, ("rdpDeferredInputCallback:"));
     g_timer_schedualed = 0;
-    rdpEnqueueMotion(g_x, g_y);
+    if ((g_old_x != g_x) || (g_old_y != g_y))
+    {
+        rdpEnqueueMotion(g_x, g_y);
+        g_old_x = g_x;
+        g_old_y = g_x;
+    }
     return 0;
 }
 
@@ -890,7 +893,12 @@ PtrAddEvent(int buttonMask, int x, int y)
             g_timer_schedualed = 0;
             TimerCancel(g_timer);
         }
-        rdpEnqueueMotion(x, y);
+        if ((g_old_x != x) || (g_old_y != y))
+        {
+            rdpEnqueueMotion(x, y);
+            g_old_x = x;
+            g_old_y = y;
+        }
         for (i = 0; i < 5; i++)
         {
             if ((buttonMask ^ g_old_button_mask) & (1 << i))
