@@ -236,10 +236,11 @@ xrdp_wm_load_pointer(struct xrdp_wm *self, char *file_name, char *data,
     init_stream(fs, 8192);
     fd = g_file_open(file_name);
 
-    if (fd < 1)
+    if (fd < 0)
     {
         log_message(LOG_LEVEL_ERROR,"xrdp_wm_load_pointer: error loading pointer from file [%s]",
                   file_name);
+        xstream_free(fs);
         return 1;
     }
 
@@ -259,8 +260,11 @@ xrdp_wm_load_pointer(struct xrdp_wm *self, char *file_name, char *data,
     {
         if (bpp == 1)
         {
-            in_uint8a(fs, palette, 8);
-
+            for (i = 0; i < 2; i++)
+            {
+                in_uint32_le(fs, pixel);
+                palette[i] = pixel;
+            }
             for (i = 0; i < 32; i++)
             {
                 for (j = 0; j < 32; j++)
@@ -279,8 +283,11 @@ xrdp_wm_load_pointer(struct xrdp_wm *self, char *file_name, char *data,
         }
         else if (bpp == 4)
         {
-            in_uint8a(fs, palette, 64);
-
+            for (i = 0; i < 16; i++)
+            {
+                in_uint32_le(fs, pixel);
+                palette[i] = pixel;
+            }
             for (i = 0; i < 32; i++)
             {
                 for (j = 0; j < 32; j++)
@@ -561,7 +568,7 @@ xrdp_wm_init(struct xrdp_wm *self)
 
         g_snprintf(cfg_file, 255, "%s/xrdp.ini", XRDP_CFG_PATH);
         fd = g_file_open(cfg_file); /* xrdp.ini */
-        if (fd > 0)
+        if (fd != -1)
         {
             names = list_create();
             names->auto_free = 1;
@@ -573,8 +580,7 @@ xrdp_wm_init(struct xrdp_wm *self)
                 /* if autorun is configured in xrdp.ini, we enforce that module to be loaded */
                 g_strncpy(section_name, autorun_name, 255);
             }
-            else if (self->session->client_info->domain &&
-                     self->session->client_info->domain[0] != '_')
+            else if (self->session->client_info->domain[0] != '_')
             {
                 /* domain names that starts with '_' are reserved for IP/DNS to
                  * simplify for the user in a proxy setup */
@@ -1727,8 +1733,14 @@ callback(long id, int msg, long param1, long param2, long param3, long param4)
                     pass it to module if there is one */
             rv = xrdp_wm_process_channel_data(wm, param1, param2, param3, param4);
             break;
+        case 0x5556:
+            rv = xrdp_mm_check_chan(wm->mm);
+            break;
+        case 0x5557:
+            //g_writeln("callback: frame ack %d", param1);
+            xrdp_mm_frame_ack(wm->mm, param1);
+            break;
     }
-
     return rv;
 }
 
@@ -1738,12 +1750,12 @@ callback(long id, int msg, long param1, long param2, long param3, long param4)
 static int APP_CC
 xrdp_wm_login_mode_changed(struct xrdp_wm *self)
 {
-    g_writeln("xrdp_wm_login_mode_changed: login_mode is %d", self->login_mode);
-
     if (self == 0)
     {
         return 0;
     }
+
+    g_writeln("xrdp_wm_login_mode_changed: login_mode is %d", self->login_mode);
 
     if (self->login_mode == 0)
     {
@@ -1864,7 +1876,7 @@ void add_string_to_logwindow(char *msg, struct list *log)
 
 /*****************************************************************************/
 int APP_CC
-xrdp_wm_log_msg(struct xrdp_wm *self, char *msg)
+xrdp_wm_show_log(struct xrdp_wm *self)
 {
     struct xrdp_bitmap *but;
     int w;
@@ -1874,10 +1886,11 @@ xrdp_wm_log_msg(struct xrdp_wm *self, char *msg)
 
     if (self->hide_log_window)
     {
+        /* make sure autologin is off */
+        self->session->client_info->rdp_autologin = 0;
+        xrdp_wm_set_login_mode(self, 0); /* reset session */
         return 0;
     }
-
-    add_string_to_logwindow(msg, self->log);
 
     if (self->log_wnd == 0)
     {
@@ -1925,7 +1938,15 @@ xrdp_wm_log_msg(struct xrdp_wm *self, char *msg)
 
     xrdp_wm_set_focused(self, self->log_wnd);
     xrdp_bitmap_invalidate(self->log_wnd, 0);
-    g_sleep(100);
+
+    return 0;
+}
+
+/*****************************************************************************/
+int APP_CC
+xrdp_wm_log_msg(struct xrdp_wm *self, char *msg)
+{
+    add_string_to_logwindow(msg, self->log);
     return 0;
 }
 

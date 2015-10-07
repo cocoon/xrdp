@@ -446,7 +446,13 @@ clipboard_send_file_data(int streamId, int lindex,
                    full_fn);
         return 1;
     }
-    g_file_seek(fd, nPositionLow);
+    if (g_file_seek(fd, nPositionLow) < 0)
+    {
+        log_message(LOG_LEVEL_ERROR, "clipboard_send_file_data: seek error "
+            "in file: %s\n", full_fn);
+        g_file_close(fd);
+        return 1;
+    }
     make_stream(s);
     init_stream(s, cbRequested + 64);
     size = g_file_read(fd, s->data + 12, cbRequested);
@@ -620,6 +626,7 @@ clipboard_c2s_in_files(struct stream *s, char *file_list)
     int cItems;
     int lindex;
     int str_len;
+    int file_count;
     struct clip_file_desc *cfd;
     char *ptr;
 
@@ -638,6 +645,7 @@ clipboard_c2s_in_files(struct stream *s, char *file_list)
     log_debug("clipboard_c2s_in_files: cItems %d", cItems);
     cfd = (struct clip_file_desc *)
           g_malloc(sizeof(struct clip_file_desc), 0);
+    file_count = 0;
     ptr = file_list;
     for (lindex = 0; lindex < cItems; lindex++)
     {
@@ -652,6 +660,13 @@ clipboard_c2s_in_files(struct stream *s, char *file_list)
         }
         xfuse_add_clip_dir_item(cfd->cFileName, 0, cfd->fileSizeLow, lindex);
 
+        if (file_count > 0)
+        {
+            *ptr = '\n';
+            ptr++;
+        }
+        file_count++;
+
         g_strcpy(ptr, "file://");
         ptr += 7;
 
@@ -665,9 +680,6 @@ clipboard_c2s_in_files(struct stream *s, char *file_list)
         str_len = g_strlen(cfd->cFileName);
         g_strcpy(ptr, cfd->cFileName);
         ptr += str_len;
-
-        *ptr = '\n';
-        ptr++;
     }
     *ptr = 0;
     g_free(cfd);

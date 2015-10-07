@@ -76,7 +76,11 @@ xrdp_rdp_read_config(struct xrdp_client_info *client_info)
         }
         else if (g_strcasecmp(item, "crypt_level") == 0)
         {
-            if (g_strcasecmp(value, "low") == 0)
+            if (g_strcasecmp(value, "none") == 0)
+            {
+                client_info->crypt_level = 0;
+            }
+            else if (g_strcasecmp(value, "low") == 0)
             {
                 client_info->crypt_level = 1;
             }
@@ -151,11 +155,65 @@ xrdp_rdp_read_config(struct xrdp_client_info *client_info)
             }
             else
             {
-                log_message(LOG_LEVEL_ALWAYS,"Warning: Your configured fastpath level is"
+                log_message(LOG_LEVEL_ALWAYS,"Warning: Your configured fastpath level is "
                           "undefined, fastpath will not be used");
                 client_info->use_fast_path = 0;
             }
         }
+        else if (g_strcasecmp(item, "security_layer") == 0)
+        {
+            if (g_strcasecmp(value, "rdp") == 0)
+            {
+                client_info->security_layer = PROTOCOL_RDP;
+            }
+            else if (g_strcasecmp(value, "tls") == 0)
+            {
+                client_info->security_layer = PROTOCOL_SSL;
+            }
+            else if (g_strcasecmp(value, "hybrid") == 0)
+            {
+                client_info->security_layer = PROTOCOL_SSL | PROTOCOL_HYBRID;
+            }
+            else
+            {
+                log_message(LOG_LEVEL_ALWAYS,"Warning: Your configured security layer is "
+                          "undefined, xrdp will negotiate client compatible");
+                client_info->security_layer = PROTOCOL_SSL | PROTOCOL_HYBRID | PROTOCOL_HYBRID_EX;
+            }
+        }
+        else if (g_strcasecmp(item, "certificate") == 0)
+        {
+            g_memset(client_info->certificate, 0, sizeof(char) * 1024);
+            if (value[0] != '/')
+            {
+                /* default certificate path */
+                g_snprintf(client_info->certificate, 1023, "%s/cert.pem", XRDP_CFG_PATH);
+                log_message(LOG_LEVEL_ALWAYS,"WARNING: Invalid x.509 certificate path defined, "
+                          "default path will be used: %s", client_info->certificate);
+            }
+            else
+            {
+                /* use user defined certificate */
+                g_strncpy(client_info->certificate, value, 1023);
+            }
+        }
+        else if (g_strcasecmp(item, "key_file") == 0)
+        {
+            g_memset(client_info->key_file, 0, sizeof(char) * 1024);
+            if (value[0] != '/')
+            {
+                /* default key_file path */
+                g_snprintf(client_info->key_file, 1023, "%s/key.pem", XRDP_CFG_PATH);
+                log_message(LOG_LEVEL_WARNING,"Invalid X.509 certificate path defined, "
+                          "default path will be used: %s", client_info->key_file);
+            }
+            else
+            {
+                /* use user defined key_file */
+                g_strncpy(client_info->key_file, value, 1023);
+            }
+        }
+
     }
 
     list_delete(items);
@@ -231,10 +289,7 @@ xrdp_rdp_create(struct xrdp_session *session, struct trans *trans)
     /* read ini settings */
     xrdp_rdp_read_config(&self->client_info);
     /* create sec layer */
-    self->sec_layer = xrdp_sec_create(self, trans,
-                                      self->client_info.crypt_level,
-                                      self->client_info.channel_code,
-                                      self->client_info.multimon);
+    self->sec_layer = xrdp_sec_create(self, trans);
     /* default 8 bit v1 color bitmap cache entries and size */
     self->client_info.cache1_entries = 600;
     self->client_info.cache1_size = 256;
@@ -314,7 +369,7 @@ xrdp_rdp_recv(struct xrdp_rdp *self, struct stream *s, int *code)
     {
         /* check for fastpath first */
         header = (const tui8 *) (s->p);
-        if ((header[0] != 0x3) && (header[0] != 0x3c))
+        if (header[0] != 0x3)
         {
             if (xrdp_sec_recv_fastpath(self->sec_layer, s) != 0)
             {
@@ -482,7 +537,9 @@ xrdp_rdp_send_data(struct xrdp_rdp *self, struct stream *s,
         }
         else
         {
-            g_writeln("mppc_encode not ok: type %d flags %d", mppc_enc->protocol_type, mppc_enc->flags);
+            LLOGLN(10, ("xrdp_rdp_send_data: mppc_encode not ok "
+                   "type %d flags %d", mppc_enc->protocol_type,
+                   mppc_enc->flags));
         }
     }
 
@@ -539,7 +596,6 @@ xrdp_rdp_init_fastpath(struct xrdp_rdp *self, struct stream *s)
 }
 
 /*****************************************************************************/
-/* TODO: compression */
 /* returns error */
 /* 2.2.9.1.2.1 Fast-Path Update (TS_FP_UPDATE)
  * http://msdn.microsoft.com/en-us/library/cc240622.aspx */
@@ -551,14 +607,20 @@ xrdp_rdp_send_fastpath(struct xrdp_rdp *self, struct stream *s,
     int updateCode;
     int fragmentation;
     int compression;
-    int ctype;
-    int len;
+    int comp_type;
+    int comp_len;
+    int no_comp_len;
+    int send_len;
     int cont;
     int header_bytes;
     int sec_bytes;
-    struct stream ls;
-    char *holdp;
-    char *holdend;
+    int to_comp_len;
+    int sec_offset;
+    int rdp_offset;
+    struct stream frag_s;
+    struct stream comp_s;
+    struct stream send_s;
+    struct xrdp_mppc_enc *mppc_enc;
 
     LLOGLN(10, ("xrdp_rdp_send_fastpath:"));
     s_pop_layer(s, rdp_hdr);
@@ -575,14 +637,18 @@ xrdp_rdp_send_fastpath(struct xrdp_rdp *self, struct stream *s,
     }
     sec_bytes = xrdp_sec_get_fastpath_bytes(self->sec_layer);
     fragmentation = 0;
-    ls = *s;
+    frag_s = *s;
+    sec_offset = (int)(frag_s.sec_hdr - frag_s.data);
+    rdp_offset = (int)(frag_s.rdp_hdr - frag_s.data);
     cont = 1;
     while (cont)
     {
-        len = (int)(ls.end - ls.p);
-        if (len > FASTPATH_FRAG_SIZE)
+        comp_type = 0;
+        send_s = frag_s;
+        no_comp_len = (int)(frag_s.end - frag_s.p);
+        if (no_comp_len > FASTPATH_FRAG_SIZE)
         {
-            len = FASTPATH_FRAG_SIZE;
+            no_comp_len = FASTPATH_FRAG_SIZE;
             if (fragmentation == 0)
             {
                 fragmentation = 2; /* FASTPATH_FRAGMENT_FIRST */
@@ -599,34 +665,60 @@ xrdp_rdp_send_fastpath(struct xrdp_rdp *self, struct stream *s,
                 fragmentation = 1; /* FASTPATH_FRAGMENT_LAST */
             }
         }
-        LLOGLN(10, ("xrdp_rdp_send_fastpath: len %d fragmentation %d",
-               len, fragmentation));
+        send_len = no_comp_len;
+        LLOGLN(10, ("xrdp_rdp_send_fastpath: no_comp_len %d fragmentation %d",
+               no_comp_len, fragmentation));
+        if ((compression != 0) && (no_comp_len > header_bytes + 16))
+        {
+            to_comp_len = no_comp_len - header_bytes;
+            mppc_enc = self->mppc_enc;
+            if (compress_rdp(mppc_enc, (tui8 *)(frag_s.p + header_bytes),
+                             to_comp_len))
+            {
+                comp_len = mppc_enc->bytes_in_opb + header_bytes;
+                LLOGLN(10, ("xrdp_rdp_send_fastpath: no_comp_len %d "
+                       "comp_len %d", no_comp_len, comp_len));
+                send_len = comp_len;
+                comp_type = mppc_enc->flags;
+                /* outputBuffer has 64 bytes preceding it */
+                g_memset(&comp_s, 0, sizeof(comp_s));
+                comp_s.data = mppc_enc->outputBuffer -
+                                         (rdp_offset + header_bytes);
+                comp_s.p = comp_s.data + rdp_offset;
+                comp_s.end = comp_s.p + send_len;
+                comp_s.size = send_len;
+                comp_s.sec_hdr = comp_s.data + sec_offset;
+                comp_s.rdp_hdr = comp_s.data + rdp_offset;
+                send_s = comp_s;
+            }
+            else
+            {
+                LLOGLN(10, ("xrdp_rdp_send_fastpath: mppc_encode not ok "
+                       "type %d flags %d", mppc_enc->protocol_type,
+                       mppc_enc->flags));
+            }
+        }
         updateHeader = (updateCode & 15) |
                       ((fragmentation & 3) << 4) |
                       ((compression & 3) << 6);
-        out_uint8(&ls, updateHeader);
+        out_uint8(&send_s, updateHeader);
         if (compression != 0)
         {
-            /* TODO: */
-            ctype = 0;
-            out_uint8(&ls, ctype);
+            out_uint8(&send_s, comp_type);
         }
-        len -= header_bytes;
-        out_uint16_le(&ls, len);
-        holdp = ls.p;
-        holdend = ls.end;
-        ls.end = ls.p + len;
-        if (xrdp_sec_send_fastpath(self->sec_layer, &ls) != 0)
+        send_len -= header_bytes;
+        out_uint16_le(&send_s, send_len);
+        send_s.end = send_s.p + send_len;
+        if (xrdp_sec_send_fastpath(self->sec_layer, &send_s) != 0)
         {
             LLOGLN(0, ("xrdp_rdp_send_fastpath: xrdp_fastpath_send failed"));
             return 1;
         }
-        ls.p = holdp + len;
-        ls.end = holdend;
-        cont = ls.p < ls.end;
-        ls.p -= header_bytes;
-        ls.sec_hdr = ls.p - sec_bytes;
-        ls.data = ls.sec_hdr;
+        frag_s.p += no_comp_len;
+        cont = frag_s.p < frag_s.end;
+        frag_s.p -= header_bytes;
+        frag_s.sec_hdr = frag_s.p - sec_bytes;
+        frag_s.data = frag_s.sec_hdr;
     }
     return 0;
 }
@@ -646,7 +738,8 @@ xrdp_rdp_send_data_update_sync(struct xrdp_rdp *self)
         LLOGLN(10, ("xrdp_rdp_send_data_update_sync: fastpath"));
         if (xrdp_rdp_init_fastpath(self, s) != 0)
         {
-           return 1;
+            free_stream(s);
+            return 1;
         }
     }
     else /* slowpath */
@@ -668,6 +761,7 @@ xrdp_rdp_send_data_update_sync(struct xrdp_rdp *self)
         if (xrdp_rdp_send_fastpath(self, s,
                                    FASTPATH_UPDATETYPE_SYNCHRONIZE) != 0)
         {
+            free_stream(s);
             return 1;
         }
     }
@@ -1013,6 +1107,24 @@ xrdp_rdp_send_disconnect_reason(struct xrdp_rdp *self, int reason)
 #endif
 
 /*****************************************************************************/
+static int APP_CC
+xrdp_rdp_process_frame_ack(struct xrdp_rdp *self, struct stream *s)
+{
+    int frame_id;
+
+    //g_writeln("xrdp_rdp_process_frame_ack:");
+    in_uint32_le(s, frame_id);
+    //g_writeln("  frame_id %d", frame_id);
+    if (self->session->callback != 0)
+    {
+        /* call to xrdp_wm.c : callback */
+        self->session->callback(self->session->id, 0x5557, frame_id, 0,
+                                0, 0);
+    }
+    return 0;
+}
+
+/*****************************************************************************/
 /* RDP_PDU_DATA */
 int APP_CC
 xrdp_rdp_process_data(struct xrdp_rdp *self, struct stream *s)
@@ -1060,6 +1172,9 @@ xrdp_rdp_process_data(struct xrdp_rdp *self, struct stream *s)
             break;
         case RDP_DATA_PDU_FONT2: /* 39(0x27) */
             xrdp_rdp_process_data_font(self, s);
+            break;
+        case 56: /* PDUTYPE2_FRAME_ACKNOWLEDGE 0x38 */
+            xrdp_rdp_process_frame_ack(self, s);
             break;
         default:
             g_writeln("unknown in xrdp_rdp_process_data %d", data_type);

@@ -115,6 +115,7 @@ char* APP_CC    g_strdup(const char* in);
 char* APP_CC    g_strndup(const char* in, const unsigned int maxlen);
 int APP_CC      g_strcmp(const char* c1, const char* c2);
 int APP_CC      g_strncmp(const char* c1, const char* c2, int len);
+int APP_CC      g_strncmp_d(const char* c1, const char* c2, const char delim, int len);
 int APP_CC      g_strcasecmp(const char* c1, const char* c2);
 int APP_CC      g_strncasecmp(const char* c1, const char* c2, int len);
 int APP_CC      g_atoi(const char* str);
@@ -160,9 +161,12 @@ int APP_CC      g_check_user_in_group(const char* username, int gid, int* ok);
 int APP_CC      g_time1(void);
 int APP_CC      g_time2(void);
 int APP_CC      g_time3(void);
+int APP_CC      g_save_to_bmp(const char* filename, char* data, int stride_bytes,
+                              int width, int height, int depth, int bits_per_pixel);
 int APP_CC      g_text2bool(const char *s);
 void * APP_CC   g_shmat(int shmid);
 int APP_CC      g_shmdt(const void *shmaddr);
 int APP_CC      g_gethostname(char *name, int len);
+int APP_CC      g_mirror_memcpy(void *dst, const void *src, int len);
 
 #endif

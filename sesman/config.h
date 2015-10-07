@@ -45,6 +45,8 @@
 #define SESMAN_CFG_XORG_PARAMS       "Xorg"
 #define SESMAN_CFG_VNC_PARAMS        "Xvnc"
 
+#define SESMAN_CFG_SESSION_VARIABLES "SessionVariables"
+
 /*
 #define SESMAN_CFG_LOGGING           "Logging"
 #define SESMAN_CFG_LOG_FILE          "LogFile"
@@ -64,6 +66,29 @@
 #define SESMAN_CFG_SESS_KILL_DISC    "KillDisconnected"
 #define SESMAN_CFG_SESS_IDLE_LIMIT   "IdleTimeLimit"
 #define SESMAN_CFG_SESS_DISC_LIMIT   "DisconnectedTimeLimit"
+
+#define SESMAN_CFG_SESS_POLICY_S "Policy"
+#define SESMAN_CFG_SESS_POLICY_DFLT_S "Default"
+#define SESMAN_CFG_SESS_POLICY_UBD_S "UBD"
+#define SESMAN_CFG_SESS_POLICY_UBI_S "UBI"
+#define SESMAN_CFG_SESS_POLICY_UBC_S "UBC"
+#define SESMAN_CFG_SESS_POLICY_UBDI_S "UBDI"
+#define SESMAN_CFG_SESS_POLICY_UBDC_S "UBDC"
+
+enum SESMAN_CFG_SESS_POLICY_BITS {
+    SESMAN_CFG_SESS_POLICY_D = 0x01,
+    SESMAN_CFG_SESS_POLICY_I = 0x02,
+    SESMAN_CFG_SESS_POLICY_C = 0x04
+};
+
+enum SESMAN_CFG_SESS_POLICY {
+    SESMAN_CFG_SESS_POLICY_DFLT = 0,
+    SESMAN_CFG_SESS_POLICY_UBD = SESMAN_CFG_SESS_POLICY_D,
+    SESMAN_CFG_SESS_POLICY_UBI = SESMAN_CFG_SESS_POLICY_I,
+    SESMAN_CFG_SESS_POLICY_UBC = SESMAN_CFG_SESS_POLICY_C,
+    SESMAN_CFG_SESS_POLICY_UBDI = SESMAN_CFG_SESS_POLICY_D | SESMAN_CFG_SESS_POLICY_I,
+    SESMAN_CFG_SESS_POLICY_UBDC = SESMAN_CFG_SESS_POLICY_D | SESMAN_CFG_SESS_POLICY_C
+};
 
 /**
  *
@@ -135,6 +160,11 @@ struct config_sessions
    * @brief enables automatic killing of disconnected session
    */
   int kill_disconnected;
+  /**
+   * @var policy
+   * @brief session allocation policy
+   */
+  enum SESMAN_CFG_SESS_POLICY policy;
 };
 
 /**
@@ -193,13 +223,13 @@ struct config_sesman
    * @var log
    * @brief Log configuration struct
    */
-   
+
   struct list* xorg_params;
   /**
    * @var log
    * @brief Log configuration struct
    */
-      
+
   //struct log_config log;
   /**
    * @var sec
@@ -211,6 +241,9 @@ struct config_sesman
    * @brief Session configuration options struct
    */
   struct config_sessions sess;
+
+  struct list* session_variables1;
+  struct list* session_variables2;
 };
 
 /**
@@ -306,7 +339,7 @@ config_read_rdp_params(int file, struct config_sesman* cs, struct list* param_n,
 int DEFAULT_CC
 config_read_xorg_params(int file, struct config_sesman* cs, struct list* param_n,
                         struct list* param_v);
-                       
+
 /**
  *
  * @brief Reads sesman [Xvnc] configuration section
@@ -320,5 +353,9 @@ config_read_xorg_params(int file, struct config_sesman* cs, struct list* param_n
 int DEFAULT_CC
 config_read_vnc_params(int file, struct config_sesman* cs, struct list* param_n,
                        struct list* param_v);
+
+int DEFAULT_CC
+config_read_session_variables(int file, struct config_sesman *cs,
+                              struct list *param_n, struct list *param_v);
 
 #endif

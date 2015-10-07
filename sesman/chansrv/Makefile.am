@@ -9,26 +9,26 @@ EXTRA_DIST = \
   rail.h \
   sound.h \
   xcommon.h \
-  mlog.h
+  mlog.h \
+  chansrv_common.h \
+  irp.h \
+  smartcard.h \
+  smartcard_pcsc.h \
+  fifo.h
 
 EXTRA_DEFINES =
 EXTRA_INCLUDES =
 EXTRA_LIBS =
 EXTRA_FLAGS =
 
-if XRDP_SIMPLESOUND
-EXTRA_DEFINES += -DXRDP_SIMPLESOUND
-EXTRA_LIBS += -lpthread -lpulse -lpulse-simple
-endif
-
 if XRDP_FUSE
 EXTRA_DEFINES += -DXRDP_FUSE
 EXTRA_LIBS += -lfuse
 endif
 
-if XRDP_LOAD_PULSE_MODULES
-EXTRA_DEFINES += -DXRDP_LOAD_PULSE_MODULES
-EXTRA_LIBS += -lpulse 
+if XRDP_OPUS
+EXTRA_DEFINES += -DXRDP_OPUS
+EXTRA_LIBS += -lopus
 endif
 
 AM_CFLAGS = \
@@ -58,7 +58,8 @@ xrdp_chansrv_SOURCES = \
   drdynvc.c \
   chansrv_fuse.c \
   irp.c \
-  fifo.c
+  fifo.c \
+  chansrv_common.c
 
 xrdp_chansrv_LDFLAGS = \
   $(EXTRA_FLAGS)

@@ -90,13 +90,25 @@ get_key_info_from_scan_code(int device_flags, int scan_code, int *keys,
             rv = &(keymap->keys_noshift[index]);
         }
     }
+    else if (shift && caps_lock && altgr)
+    {
+        rv = &(keymap->keys_shiftcapslockaltgr[index]);
+    }
     else if (shift && caps_lock)
     {
         rv = &(keymap->keys_shiftcapslock[index]);
     }
-    else if (shift)
+    else if (shift && altgr)
+    {
+        rv = &(keymap->keys_shiftaltgr[index]);
+    }
+     else if (shift)
     {
         rv = &(keymap->keys_shift[index]);
+    }
+    else if (caps_lock && altgr)
+    {
+        rv = &(keymap->keys_capslockaltgr[index]);
     }
     else if (caps_lock)
     {
@@ -231,10 +243,10 @@ get_keymaps(int keylayout, struct xrdp_keymap *keymap)
     {
         fd = g_file_open(filename);
 
-        if (fd > 0)
+        if (fd != -1)
         {
             lkeymap = (struct xrdp_keymap *)g_malloc(sizeof(struct xrdp_keymap), 0);
-            /* make a copy of the build in kaymap */
+            /* make a copy of the built-in keymap */
             g_memcpy(lkeymap, keymap, sizeof(struct xrdp_keymap));
             /* clear the keymaps */
             g_memset(keymap, 0, sizeof(struct xrdp_keymap));
@@ -242,8 +254,11 @@ get_keymaps(int keylayout, struct xrdp_keymap *keymap)
             km_read_section(fd, "noshift", keymap->keys_noshift);
             km_read_section(fd, "shift", keymap->keys_shift);
             km_read_section(fd, "altgr", keymap->keys_altgr);
+            km_read_section(fd, "shiftaltgr", keymap->keys_shiftaltgr);
             km_read_section(fd, "capslock", keymap->keys_capslock);
+            km_read_section(fd, "capslockaltgr", keymap->keys_capslockaltgr);
             km_read_section(fd, "shiftcapslock", keymap->keys_shiftcapslock);
+            km_read_section(fd, "shiftcapslockaltgr", keymap->keys_shiftcapslockaltgr);
 
             if (g_memcmp(lkeymap, keymap, sizeof(struct xrdp_keymap)) != 0)
             {

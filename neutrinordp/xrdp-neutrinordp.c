@@ -27,7 +27,7 @@
 #ifdef XRDP_DEBUG
 #define LOG_LEVEL 99
 #else
-#define LOG_LEVEL 11
+#define LOG_LEVEL 1
 #endif
 
 #define LLOG(_level, _args) \
@@ -195,14 +195,33 @@ lxrdp_event(struct mod *mod, int msg, long param1, long param2,
     switch (msg)
     {
         case 15: /* key down */
+            /* Before we handle the first character we synchronize
+               capslock and numlock. */
+            /* We collect the state during the first synchronize
+               ( see msg 17) */
+            if (!mod->bool_keyBoardSynced)
+            {
+                LLOGLN(11, ("Additional Sync event handled : %d", mod->keyBoardLockInfo));
+                mod->inst->input->SynchronizeEvent(mod->inst->input, mod->keyBoardLockInfo);
+                mod->bool_keyBoardSynced = 1;
+            }
             mod->inst->input->KeyboardEvent(mod->inst->input, param4, param3);
             break;
         case 16: /* key up */
             mod->inst->input->KeyboardEvent(mod->inst->input, param4, param3);
             break;
-        case 17: /*Synchronize*/
-            LLOGLN(11, ("Synchronized event handled"));
-            mod->inst->input->SynchronizeEvent(mod->inst->input, 0);
+        case 17: /* Synchronize */
+            LLOGLN(11, ("Synchronized event handled : %d",param1));
+            /* In some situations the Synchronize event come to early.
+               Therefore we store this information and use it when we
+               receive the first keyboard event
+               Without this fix numlock and capslock can come
+               out of sync. */
+            mod->inst->input->SynchronizeEvent(mod->inst->input, param1);
+            if (!mod->bool_keyBoardSynced)
+            {
+                mod->keyBoardLockInfo = param1;
+            }
             break;
         case 100: /* mouse move */
             LLOGLN(12, ("mouse move %d %d", param1, param2));
@@ -280,8 +299,7 @@ lxrdp_event(struct mod *mod, int msg, long param1, long param2,
             data = (char *)param3;
             total_size = (int)param4;
 
-            LLOGLN(10, ("lxrdp_event: client to server ,chanid= %d  flags= %d", chanid, flags));
-            g_hexdump(data, size); // for debugging
+            LLOGLN(12, ("lxrdp_event: client to server ,chanid= %d  flags= %d", chanid, flags));
             if ((chanid < 0) || (chanid >= mod->inst->settings->num_channels))
             {
                 LLOGLN(0, ("lxrdp_event: error chanid %d", chanid));
@@ -1279,12 +1297,16 @@ lfreerdp_pointer_cached(rdpContext *context,
                                mod->pointer_cache[index].bpp);
 }
 
-static void DEFAULT_CC lfreerdp_polygon_cb(rdpContext* context, POLYGON_CB_ORDER* polygon_cb)
+/******************************************************************************/
+static void DEFAULT_CC
+lfreerdp_polygon_cb(rdpContext* context, POLYGON_CB_ORDER* polygon_cb)
 {
     LLOGLN(0, ("lfreerdp_polygon_sc called:- not supported!!!!!!!!!!!!!!!!!!!!"));
 }
 
-static void DEFAULT_CC lfreerdp_polygon_sc(rdpContext* context, POLYGON_SC_ORDER* polygon_sc)
+/******************************************************************************/
+static void DEFAULT_CC
+lfreerdp_polygon_sc(rdpContext* context, POLYGON_SC_ORDER* polygon_sc)
 {
     struct mod *mod;
     int i, npoints;
@@ -1333,7 +1355,9 @@ static void DEFAULT_CC lfreerdp_polygon_sc(rdpContext* context, POLYGON_SC_ORDER
     }
 }
 
-static void DEFAULT_CC lfreerdp_syncronize(rdpContext* context)
+/******************************************************************************/
+static void DEFAULT_CC
+lfreerdp_syncronize(rdpContext* context)
 {
     struct mod *mod;
     mod = ((struct mod_context *)context)->modi;
@@ -1380,17 +1404,41 @@ lfreerdp_pre_connect(freerdp *instance)
     instance->settings->glyph_cache = true;
     /* GLYPH_SUPPORT_FULL and GLYPH_SUPPORT_PARTIAL seem to be the same */
     instance->settings->glyphSupportLevel = GLYPH_SUPPORT_FULL;
-    instance->settings->order_support[NEG_GLYPH_INDEX_INDEX] = 1;
-    instance->settings->order_support[NEG_FAST_GLYPH_INDEX] = 0;
-    instance->settings->order_support[NEG_FAST_INDEX_INDEX] = 0;
+
+    instance->settings->order_support[NEG_DSTBLT_INDEX] = 1; /* 0x00 */
+    instance->settings->order_support[NEG_PATBLT_INDEX] = 1;
     instance->settings->order_support[NEG_SCRBLT_INDEX] = 1;
+    instance->settings->order_support[NEG_MEMBLT_INDEX] = 1;
+    instance->settings->order_support[NEG_MEM3BLT_INDEX] = 0;
+    instance->settings->order_support[NEG_ATEXTOUT_INDEX] = 0;
+    instance->settings->order_support[NEG_AEXTTEXTOUT_INDEX] = 0;
+    instance->settings->order_support[NEG_DRAWNINEGRID_INDEX] = 0;
+    instance->settings->order_support[NEG_LINETO_INDEX] = 1; /* 0x08 */
+    instance->settings->order_support[NEG_MULTI_DRAWNINEGRID_INDEX] = 0;
+    instance->settings->order_support[NEG_OPAQUE_RECT_INDEX] = 1;
     instance->settings->order_support[NEG_SAVEBITMAP_INDEX] = 0;
+    instance->settings->order_support[NEG_WTEXTOUT_INDEX] = 0;
+    instance->settings->order_support[NEG_MEMBLT_V2_INDEX] = 1;
+    instance->settings->order_support[NEG_MEM3BLT_V2_INDEX] = 0;
+    instance->settings->order_support[NEG_MULTIDSTBLT_INDEX] = 0;
+    instance->settings->order_support[NEG_MULTIPATBLT_INDEX] = 0; /* 0x10 */
+    instance->settings->order_support[NEG_MULTISCRBLT_INDEX] = 0;
+    instance->settings->order_support[NEG_MULTIOPAQUERECT_INDEX] = 0;
+    instance->settings->order_support[NEG_FAST_INDEX_INDEX] = 0;
+    instance->settings->order_support[NEG_POLYGON_SC_INDEX] = 0;
+    instance->settings->order_support[NEG_POLYGON_CB_INDEX] = 0;
+    instance->settings->order_support[NEG_POLYLINE_INDEX] = 0;
+    /* 0x17 missing */
+    instance->settings->order_support[NEG_FAST_GLYPH_INDEX] = 0; /* 0x18 */
+    instance->settings->order_support[NEG_ELLIPSE_SC_INDEX] = 0;
+    instance->settings->order_support[NEG_ELLIPSE_CB_INDEX] = 0;
+    instance->settings->order_support[NEG_GLYPH_INDEX_INDEX] = 1;
+    instance->settings->order_support[NEG_GLYPH_WEXTTEXTOUT_INDEX] = 0;
+    instance->settings->order_support[NEG_GLYPH_WLONGTEXTOUT_INDEX] = 0;
+    instance->settings->order_support[NEG_GLYPH_WLONGEXTTEXTOUT_INDEX] = 0;
+    /* 0x1F missing*/
 
     instance->settings->bitmap_cache = 1;
-    instance->settings->order_support[NEG_MEMBLT_INDEX] = 1;
-    instance->settings->order_support[NEG_MEMBLT_V2_INDEX] = 1;
-    instance->settings->order_support[NEG_MEM3BLT_INDEX] = 0;
-    instance->settings->order_support[NEG_MEM3BLT_V2_INDEX] = 0;
     instance->settings->bitmapCacheV2NumCells = 3; // 5;
     instance->settings->bitmapCacheV2CellInfo[0].numEntries = 600; // 0x78;
     instance->settings->bitmapCacheV2CellInfo[0].persistent = 0;
@@ -1404,12 +1452,6 @@ lfreerdp_pre_connect(freerdp *instance)
     instance->settings->bitmapCacheV2CellInfo[4].persistent = 0;
 
     instance->settings->bitmap_cache_v3 = 1;
-    instance->settings->order_support[NEG_MULTIDSTBLT_INDEX] = 0;
-    instance->settings->order_support[NEG_MULTIPATBLT_INDEX] = 0;
-    instance->settings->order_support[NEG_MULTISCRBLT_INDEX] = 0;
-    instance->settings->order_support[NEG_MULTIOPAQUERECT_INDEX] = 0;
-    instance->settings->order_support[NEG_POLYLINE_INDEX] = 0;
-
 
     instance->settings->username = g_strdup(mod->username);
     instance->settings->password = g_strdup(mod->password);
@@ -1472,7 +1514,6 @@ lfreerdp_pre_connect(freerdp *instance)
     instance->update->pointer->PointerColor = lfreerdp_pointer_color;
     instance->update->pointer->PointerNew = lfreerdp_pointer_new;
     instance->update->pointer->PointerCached = lfreerdp_pointer_cached;
-
 
     if ((mod->username[0] != 0) && (mod->password[0] != 0))
     {
@@ -1761,7 +1802,6 @@ lfreerdp_post_connect(freerdp *instance)
     mod = ((struct mod_context *)(instance->context))->modi;
     g_memset(mod->password, 0, sizeof(mod->password));
 
-
     mod->inst->update->window->WindowCreate = lrail_WindowCreate;
     mod->inst->update->window->WindowUpdate = lrail_WindowUpdate;
     mod->inst->update->window->WindowDelete = lrail_WindowDelete;
@@ -1772,7 +1812,6 @@ lfreerdp_post_connect(freerdp *instance)
     mod->inst->update->window->NotifyIconDelete = lrail_NotifyIconDelete;
     mod->inst->update->window->MonitoredDesktop = lrail_MonitoredDesktop;
     mod->inst->update->window->NonMonitoredDesktop = lrail_NonMonitoredDesktop;
-
 
     return 1;
 }
@@ -1816,7 +1855,6 @@ lfreerdp_receive_channel_data(freerdp *instance, int channelId, uint8 *data,
     if (lchid >= 0)
     {
         LLOGLN(10, ("lfreerdp_receive_channel_data: server to client, chanid: %d", lchid));
-        g_hexdump(data, size); // for debugging
         error = mod->server_send_to_channel(mod, lchid, (char *)data, size,
                                             total_size, flags);
 

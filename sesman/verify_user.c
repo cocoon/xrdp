@@ -51,6 +51,7 @@ long DEFAULT_CC
 auth_userpass(char *user, char *pass, int *errorcode)
 {
     const char *encr;
+    const char *epass;
     struct passwd *spw;
     struct spwd *stp;
 
@@ -84,14 +85,26 @@ auth_userpass(char *user, char *pass, int *errorcode)
         /* old system with only passwd */
         encr = spw->pw_passwd;
     }
-
-    return (strcmp(encr, crypt(pass, encr)) == 0);
+    epass = crypt(pass, encr);
+    if (epass == 0)
+    {
+        return 0;
+    }
+    return (strcmp(encr, epass) == 0);
 }
 
 /******************************************************************************/
 /* returns error */
 int DEFAULT_CC
 auth_start_session(long in_val, int in_display)
+{
+    return 0;
+}
+
+/******************************************************************************/
+/* returns error */
+int DEFAULT_CC
+auth_stop_session(long in_val)
 {
     return 0;
 }
@@ -308,7 +321,10 @@ auth_account_disabled(struct spwd *stp)
         return 1;
     }
 
-    if (today >= (stp->sp_lstchg + stp->sp_max + stp->sp_inact))
+    if ((stp->sp_max >= 0) &&
+        (stp->sp_inact >= 0) &&
+        (stp->sp_lstchg > 0) &&
+        (today >= (stp->sp_lstchg + stp->sp_max + stp->sp_inact)))
     {
         return 1;
     }

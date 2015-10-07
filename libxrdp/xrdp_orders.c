@@ -55,6 +55,8 @@ xrdp_orders_create(struct xrdp_session *session, struct xrdp_rdp *rdp_layer)
     {
         self->rfx_min_pixel = 64 * 32;
     }
+    make_stream(self->s);
+    make_stream(self->temp_s);
     return self;
 }
 
@@ -68,6 +70,8 @@ xrdp_orders_delete(struct xrdp_orders *self)
     }
     xrdp_jpeg_deinit(self->jpeg_han);
     free_stream(self->out_s);
+    free_stream(self->s);
+    free_stream(self->temp_s);
     g_free(self->orders_state.text_data);
     g_free(self);
 }
@@ -2321,19 +2325,26 @@ xrdp_orders_send_bitmap(struct xrdp_orders *self,
         e = 4 - e;
     }
 
-    make_stream(s);
-    init_stream(s, 16384);
-    make_stream(temp_s);
-    init_stream(temp_s, 16384);
+    s = self->s;
+    init_stream(s, 16384 * 2);
+    temp_s = self->temp_s;
+    init_stream(temp_s, 16384 * 2);
     p = s->p;
     i = height;
-    lines_sending = xrdp_bitmap_compress(data, width, height, s, bpp, 16384,
-                                         i - 1, temp_s, e);
+    if (bpp > 24)
+    {
+        lines_sending = xrdp_bitmap32_compress(data, width, height, s,
+                                               bpp, 16384,
+                                               i - 1, temp_s, e, 0x10);
+    }
+    else
+    {
+        lines_sending = xrdp_bitmap_compress(data, width, height, s, bpp, 16384,
+                                             i - 1, temp_s, e);
+    }
 
     if (lines_sending != height)
     {
-        free_stream(s);
-        free_stream(temp_s);
         g_writeln("error in xrdp_orders_send_bitmap, lines_sending(%d) != \
 height(%d)", lines_sending, height);
         return 1;
@@ -2381,8 +2392,6 @@ height(%d)", lines_sending, height);
     }
 
     out_uint8a(self->out_s, s->data, bufsize);
-    free_stream(s);
-    free_stream(temp_s);
     return 0;
 }
 
@@ -2581,16 +2590,17 @@ xrdp_orders_send_bitmap2(struct xrdp_orders *self,
         e = 4 - e;
     }
 
-    make_stream(s);
-    init_stream(s, 16384);
-    make_stream(temp_s);
-    init_stream(temp_s, 16384);
+    s = self->s;
+    init_stream(s, 16384 * 2);
+    temp_s = self->temp_s;
+    init_stream(temp_s, 16384 * 2);
     p = s->p;
     i = height;
     if (bpp > 24)
     {
-        lines_sending = xrdp_bitmap32_compress(data, width, height, s, bpp, 16384,
-                                               i - 1, temp_s, e);
+        lines_sending = xrdp_bitmap32_compress(data, width, height, s,
+                                               bpp, 16384,
+                                               i - 1, temp_s, e, 0x10);
     }
     else
     {
@@ -2600,8 +2610,6 @@ xrdp_orders_send_bitmap2(struct xrdp_orders *self,
 
     if (lines_sending != height)
     {
-        free_stream(s);
-        free_stream(temp_s);
         g_writeln("error in xrdp_orders_send_bitmap2, lines_sending(%d) != \
 height(%d)", lines_sending, height);
         return 1;
@@ -2630,8 +2638,6 @@ height(%d)", lines_sending, height);
     i = cache_idx & 0xff;
     out_uint8(self->out_s, i);
     out_uint8a(self->out_s, s->data, bufsize);
-    free_stream(s);
-    free_stream(temp_s);
     return 0;
 }
 

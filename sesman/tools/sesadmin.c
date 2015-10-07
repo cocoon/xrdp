@@ -2,6 +2,19 @@
  * sesadmin.c - an sesman administration tool
  * (c) 2008 Simone Fedele
  *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #include "arch.h"
@@ -107,6 +120,12 @@ int main(int argc, char **argv)
     scp_init(&logging);
 
     sock = g_tcp_socket();
+    if (sock < 0)
+    {
+        LOG_DBG("Socket open error, g_tcp_socket() failed\n");
+        return 1;
+    }
+
     s = scp_session_create();
     c = scp_connection_create(sock);
 
@@ -179,15 +198,15 @@ void cmndList(struct SCP_CONNECTION *c)
                    (dsl[idx]).idle_days, (dsl[idx]).idle_hours, (dsl[idx]).idle_minutes, \
                    (dsl[idx]).conn_year, (dsl[idx]).conn_month, (dsl[idx]).conn_day, (dsl[idx]).conn_hour, (dsl[idx]).conn_minute);
         }
-
-        if (0 != dsl)
-        {
-            g_free(dsl);
-        }
     }
     else
     {
         printf("No sessions.\n");
+    }
+
+    if (0 != dsl)
+    {
+        g_free(dsl);
     }
 }
 

@@ -1,4 +1,5 @@
-EXTRA_DIST = xrdp.ini ad24b.bmp ad256.bmp xrdp24b.bmp xrdp256.bmp xrdp_logo.bmp sans-10.fv1 cursor0.cur cursor1.cur xrdp.h xrdp_types.h
+EXTRA_DIST = xrdp.ini ad24b.bmp ad256.bmp xrdp24b.bmp xrdp256.bmp xrdp_logo.bmp sans-10.fv1 cursor0.cur cursor1.cur xrdp.h xrdp_types.h \
+xrdp_encoder.h xrdp_keyboard.ini
 
 EXTRA_INCLUDES =
 EXTRA_LIBS =
@@ -13,6 +14,12 @@ endif
 if GOT_PREFIX
 EXTRA_INCLUDES += -I$(prefix)/include
 EXTRA_FLAGS += -L$(prefix)/lib -Wl,-rpath -Wl,$(prefix)/lib
+endif
+
+if XRDP_RFXCODEC
+EXTRA_DEFINES += -DXRDP_RFXCODEC
+EXTRA_INCLUDES += -I$(top_srcdir)/librfxcodec/include
+EXTRA_LIBS += $(top_srcdir)/librfxcodec/src/librfxencode.a
 endif
 
 AM_CFLAGS = \
@@ -50,7 +57,8 @@ xrdp_SOURCES = \
 
 xrdp_LDADD = \
   $(top_builddir)/common/libcommon.la \
-  $(top_builddir)/libxrdp/libxrdp.la
+  $(top_builddir)/libxrdp/libxrdp.la \
+  $(EXTRA_LIBS)
 
 xrdp_LDFLAGS = \
   $(EXTRA_FLAGS)
@@ -58,7 +66,8 @@ xrdp_LDFLAGS = \
 xrdpsysconfdir=$(sysconfdir)/xrdp
 
 xrdpsysconf_DATA = \
-  xrdp.ini 
+  xrdp.ini \
+  xrdp_keyboard.ini
 
 xrdppkgdatadir=$(datadir)/xrdp
 
