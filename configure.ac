@@ -4,6 +4,7 @@ AC_PREREQ(2.59)
 AC_INIT([xrdp], [0.9.0], [xrdp-devel@googlegroups.com])
 AC_CONFIG_HEADERS(config_ac.h:config_ac-h.in)
 AM_INIT_AUTOMAKE([1.6 foreign])
+AC_CONFIG_MACRO_DIRS([m4])
 AC_PROG_CC
 AC_C_CONST
 AC_PROG_LIBTOOL
@@ -53,6 +54,9 @@ AM_CONDITIONAL(SESMAN_NOPAM, [test x$enable_pam != xyes])
 AC_ARG_ENABLE(ipv6, AS_HELP_STRING([--enable-ipv6],
               [Build IPv6 support (default: no, experimental)]),
               [], [enable_ipv6=no])
+AC_ARG_ENABLE(ipv6only, AS_HELP_STRING([--enable-ipv6only],
+              [Build IPv6-only (default: no)]),
+              [], [enable_ipv6only=no])
 AC_ARG_ENABLE(kerberos, AS_HELP_STRING([--enable-kerberos],
               [Build kerberos support (default: no)]),
               [], [enable_kerberos=no])
@@ -98,8 +102,6 @@ AC_ARG_ENABLE(opus, AS_HELP_STRING([--enable-opus],
               [], [enable_opus=no])
 AM_CONDITIONAL(XRDP_OPUS, [test x$enable_opus = xyes])
 
-AM_CONDITIONAL(GOT_PREFIX, test "x${prefix}" != "xNONE"])
-
 # checking for openssl
 AC_CHECK_HEADER([openssl/rc4.h], [],
   [AC_MSG_ERROR([please install libssl-dev or openssl-devel])],
@@ -127,15 +129,16 @@ then
   fi
 fi
 
+if test "x$enable_ipv6only" = "xyes"
+then
+  enable_ipv6=yes
+  AC_DEFINE([XRDP_ENABLE_IPV6ONLY],1,[Enable IPv6 only])
+fi
+
 if test "x$enable_ipv6" = "xyes"
 then
   AC_DEFINE([XRDP_ENABLE_IPV6],1,[Enable IPv6])
 fi
-
-AC_CHECK_MEMBER([struct in6_addr.s6_addr],
-                [],
-                [AC_DEFINE(NO_ARPA_INET_H_IP6, 1, [for IPv6])],
-                [#include <arpa/inet.h>])
 
 if test "x$enable_pam" != "xyes" || test "x$bsd" = "xtrue"
 then
@@ -200,15 +203,25 @@ else
 fi
 fi
 
-# checking for Xlib, Xfixes
-AC_CHECK_HEADER([X11/Xlib.h], [],
-  [AC_MSG_ERROR([please install libx11-dev or libX11-devel])])
+AC_PATH_XTRA
+if test "x$no_x" == "xyes"; then
+  AC_MSG_ERROR([please install libx11-dev or libX11-devel])
+fi
+
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS $X_CFLAGS"
+
+# checking for Xfixes
 AC_CHECK_HEADER([X11/extensions/Xfixes.h], [],
   [AC_MSG_ERROR([please install libx11-dev and libxfixes-dev or libXfixes-devel])],
   [#include <X11/Xlib.h>])
+
+# checking for Xrandr
 AC_CHECK_HEADER([X11/extensions/Xrandr.h], [],
   [AC_MSG_ERROR([please install libxrandr-dev or libXrandr-devel])],
   [#include <X11/Xlib.h>])
+
+CFLAGS="$save_CFLAGS"
 
 libdir="${libdir}/xrdp";
 if test "x${prefix}" = "xNONE" ; then

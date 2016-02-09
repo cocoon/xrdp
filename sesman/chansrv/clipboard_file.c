@@ -22,6 +22,7 @@
  * CLIPRDR_FILEDESCRIPTOR
  * http://msdn.microsoft.com/en-us/library/ff362447%28prot.20%29.aspx */
 
+#include <sys/time.h>
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/Xfixes.h>
@@ -553,7 +554,7 @@ clipboard_process_file_request(struct stream *s, int clip_msg_status,
 }
 
 /*****************************************************************************/
-/* server requested info about the file and this is the responce
+/* server requested info about the file and this is the response
    it's either the file size or file data */
 int APP_CC
 clipboard_process_file_response(struct stream *s, int clip_msg_status,
