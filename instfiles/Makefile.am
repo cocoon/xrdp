@@ -1,15 +1,14 @@
 EXTRA_DIST = \
    xrdp.sh \
    xrdp-sesman.service \
-   xrdp.service \
-   $(startscript_DATA)
+   xrdp.service
 
 #
 # files for all platforms
 #
 startscriptdir=$(sysconfdir)/xrdp
 
-startscript_DATA = \
+dist_startscript_DATA = \
   km-0407.ini \
   km-0409.ini \
   km-040c.ini \
@@ -32,28 +31,28 @@ startscript_DATA = \
 #
 # platform specific files
 #
-SUBDIRS=
+SUBDIRS =
 if LINUX
-SUBDIRS+= \
-        pam.d \
-        pulse
-startscript_DATA+= xrdp.sh
+SUBDIRS += \
+  pam.d \
+  pulse
+dist_startscript_SCRIPTS = xrdp.sh
 if HAVE_SYSTEMD
-systemdsystemunit_DATA = \
-        xrdp-sesman.service \
-        xrdp.service
+dist_systemdsystemunit_DATA = \
+  xrdp-sesman.service \
+  xrdp.service
 else
-SUBDIRS+= \
-  	default \
-	init.d
+SUBDIRS += \
+  default \
+  init.d
 endif # HAVE_SYSTEMD
 endif # LINUX
 
 if FREEBSD
-SUBDIRS+= \
-        pam.d \
-        rc.d \
-        pulse
+SUBDIRS += \
+  pam.d \
+  rc.d \
+  pulse
 endif
 
 #
@@ -62,9 +61,7 @@ endif
 if LINUX
 # must be tab below
 install-data-hook:
-	chmod 755 $(DESTDIR)$(sysconfdir)/xrdp/xrdp.sh
 	if [ -f $(DESTDIR)$(sysconfdir)/init.d/xrdp ]; then \
-		chmod 755 $(DESTDIR)$(sysconfdir)/init.d/xrdp; \
 		sed -i 's|__BASE__|$(prefix)|' $(DESTDIR)$(sysconfdir)/init.d/xrdp; \
 	fi
 endif
@@ -72,6 +69,5 @@ endif
 if FREEBSD
 # must be tab below
 install-data-hook:
-	chmod 755 $(DESTDIR)$(sysconfdir)/rc.d/xrdp
 	sed -i '' 's|%%PREFIX%%|$(prefix)|g' $(DESTDIR)$(sysconfdir)/rc.d/xrdp
 endif
