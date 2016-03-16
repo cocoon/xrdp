@@ -46,7 +46,6 @@ sesman_main_loop(void)
     int error;
     int robjs_count;
     int cont;
-    int pid;
     tbus sck_obj;
     tbus robjs[8];
 
@@ -331,7 +330,6 @@ main(int argc, char **argv)
 #if 1
     g_signal_hang_up(sig_sesman_reload_cfg); /* SIGHUP  */
     g_signal_user_interrupt(sig_sesman_shutdown); /* SIGINT  */
-    g_signal_kill(sig_sesman_shutdown); /* SIGKILL */
     g_signal_terminate(sig_sesman_shutdown); /* SIGTERM */
     g_signal_child_stop(sig_sesman_session_end); /* SIGCHLD */
 #endif
