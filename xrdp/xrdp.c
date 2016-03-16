@@ -34,7 +34,7 @@ static long g_sync_mutex = 0;
 static long g_sync1_mutex = 0;
 static tbus g_term_event = 0;
 static tbus g_sync_event = 0;
-/* syncronize stuff */
+/* synchronize stuff */
 static int g_sync_command = 0;
 static long g_sync_result = 0;
 static long g_sync_param1 = 0;
@@ -107,7 +107,7 @@ xrdp_shutdown(int sig)
 
     threadid = tc_get_threadid();
     g_writeln("shutting down");
-    g_writeln("signal %d threadid %p", sig, threadid);
+    g_writeln("signal %d threadid %lld", sig, (long long)threadid);
 
     if (!g_is_wait_obj_set(g_term_event))
     {
@@ -437,7 +437,7 @@ main(int argc, char **argv)
     }
 
     /* starting logging subsystem */
-    error = log_start(cfg_file, "XRDP");
+    error = log_start(cfg_file, "xrdp");
 
     if (error != LOG_STARTUP_OK)
     {
@@ -563,7 +563,6 @@ main(int argc, char **argv)
     g_threadid = tc_get_threadid();
     g_listen = xrdp_listen_create();
     g_signal_user_interrupt(xrdp_shutdown); /* SIGINT */
-    g_signal_kill(xrdp_shutdown); /* SIGKILL */
     g_signal_pipe(pipe_sig); /* SIGPIPE */
     g_signal_terminate(xrdp_shutdown); /* SIGTERM */
     g_signal_child_stop(xrdp_child); /* SIGCHLD */

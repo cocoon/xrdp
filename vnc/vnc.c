@@ -60,7 +60,7 @@ rfbEncryptBytes(char *bytes, char *passwd)
     int len;
     int passwd_bytes;
 
-    /* create password hash from passowrd */
+    /* create password hash from password */
     passwd_bytes = g_strlen(passwd);
     sha1 = ssl_sha1_info_create();
     ssl_sha1_transform(sha1, "xrdp_vnc", 8);
@@ -365,7 +365,7 @@ lib_mod_event(struct vnc *v, int msg, long param1, long param2,
     }
     else if (msg == 200) /* invalidate */
     {
-        /* FrambufferUpdateRequest */
+        /* FramebufferUpdateRequest */
         init_stream(s, 8192);
         out_uint8(s, 3);
         out_uint8(s, 0);
@@ -727,7 +727,7 @@ lib_framebuffer_update(struct vnc *v)
 
     if (error == 0)
     {
-        /* FrambufferUpdateRequest */
+        /* FramebufferUpdateRequest */
         init_stream(s, 8192);
         out_uint8(s, 3);
         out_uint8(s, 1);
@@ -993,12 +993,18 @@ lib_mod_connect(struct vnc *v)
     v->server_msg(v, "VNC started connecting", 0);
     check_sec_result = 1;
 
-    /* only support 8 and 16 bpp connections from rdp client */
-    if ((v->server_bpp != 8) && (v->server_bpp != 15) &&
-            (v->server_bpp != 16) && (v->server_bpp != 24))
+    /* check if bpp is supported for rdp connection */
+    switch (v->server_bpp)
     {
-        v->server_msg(v, "VNC error - only supporting 8, 15, 16 and 24 bpp rdp "
-                      "connections", 0);
+        case 8:
+        case 15:
+        case 16:
+        case 24:
+        case 32:
+            break;
+        default:
+            v->server_msg(v, "VNC error - only supporting 8, 15, 16, 24 and 32 "
+                          "bpp rdp connections", 0);
         return 1;
     }
 
@@ -1310,7 +1316,7 @@ lib_mod_connect(struct vnc *v)
 
     if (error == 0)
     {
-        /* FrambufferUpdateRequest */
+        /* FramebufferUpdateRequest */
         init_stream(s, 8192);
         out_uint8(s, 3);
         out_uint8(s, 0);

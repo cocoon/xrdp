@@ -1327,7 +1327,7 @@ tintptr APP_CC
 g_create_wait_obj_from_socket(tintptr socket, int write)
 {
 #ifdef _WIN32
-    /* Create and return corresponding event handle for WaitForMultipleObjets */
+    /* Create and return corresponding event handle for WaitForMultipleObjects */
     WSAEVENT event;
     long lnetevent = 0;
 
@@ -1979,7 +1979,7 @@ g_directory_exist(const char *dirname)
 {
 #if defined(_WIN32)
     return 0; // use GetFileAttributes and check return value
-    // is not -1 and FILE_ATTRIBUT_DIRECTORY bit is set
+    // is not -1 and FILE_ATTRIBUTE_DIRECTORY bit is set
 #else
     struct stat st;
 
@@ -2711,17 +2711,6 @@ g_signal_user_interrupt(void (*func)(int))
 #if defined(_WIN32)
 #else
     signal(SIGINT, func);
-#endif
-}
-
-/*****************************************************************************/
-/* does not work in win32 */
-void APP_CC
-g_signal_kill(void (*func)(int))
-{
-#if defined(_WIN32)
-#else
-    signal(SIGKILL, func);
 #endif
 }
 

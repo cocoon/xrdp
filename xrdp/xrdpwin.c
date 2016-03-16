@@ -34,7 +34,7 @@ static long g_sync_mutex = 0;
 static long g_sync1_mutex = 0;
 static tbus g_term_event = 0;
 static tbus g_sync_event = 0;
-/* syncronize stuff */
+/* synchronize stuff */
 static int g_sync_command = 0;
 static long g_sync_result = 0;
 static long g_sync_param1 = 0;
@@ -618,7 +618,6 @@ main(int argc, char **argv)
     g_threadid = tc_get_threadid();
     g_listen = xrdp_listen_create();
     g_signal_user_interrupt(xrdp_shutdown); /* SIGINT */
-    g_signal_kill(xrdp_shutdown); /* SIGKILL */
     g_signal_pipe(pipe_sig); /* SIGPIPE */
     g_signal_terminate(xrdp_shutdown); /* SIGTERM */
     g_sync_mutex = tc_mutex_create();
