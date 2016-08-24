@@ -55,7 +55,7 @@ static tbus g_thread_done_event = 0;
 
 static int g_use_unix_socket = 0;
 
-static char g_xrdpapi_magic[12] =
+static const unsigned char g_xrdpapi_magic[12] =
 { 0x78, 0x32, 0x10, 0x67, 0x00, 0x92, 0x30, 0x56, 0xff, 0xd8, 0xa9, 0x1f };
 
 int g_display_num = 0;
@@ -97,7 +97,7 @@ add_timeout(int msoffset, void (*callback)(void *data), void *data)
 
     LOG(10, ("add_timeout:"));
     now = g_time3();
-    tobj = g_malloc(sizeof(struct timeout_obj), 1);
+    tobj = g_new0(struct timeout_obj, 1);
     tobj->mstime = now + msoffset;
     tobj->callback = callback;
     tobj->data = data;
@@ -734,8 +734,7 @@ process_message(void)
                 rv = process_message_channel_data_response(s);
                 break;
             default:
-                LOGM((LOG_LEVEL_ERROR, "process_message: error in process_message ",
-                      "unknown msg %d", id));
+                LOGM((LOG_LEVEL_ERROR, "process_message: unknown msg %d", id));
                 break;
         }
 
@@ -756,7 +755,6 @@ int DEFAULT_CC
 my_trans_data_in(struct trans *trans)
 {
     struct stream *s = (struct stream *)NULL;
-    int id = 0;
     int size = 0;
     int error = 0;
 
@@ -772,7 +770,7 @@ my_trans_data_in(struct trans *trans)
 
     LOGM((LOG_LEVEL_DEBUG, "my_trans_data_in:"));
     s = trans_get_in_s(trans);
-    in_uint32_le(s, id);
+    in_uint8s(s, 4); /* id */
     in_uint32_le(s, size);
     error = trans_force_read(trans, size - 8);
 
@@ -1403,8 +1401,8 @@ get_log_path()
 }
 
 /*****************************************************************************/
-static unsigned int APP_CC
-get_log_level(const char* level_str, unsigned int default_level)
+static enum logLevels APP_CC
+get_log_level(const char* level_str, enum logLevels default_level)
 {
     static const char* levels[] = {
         "LOG_LEVEL_ALWAYS",
@@ -1423,7 +1421,7 @@ get_log_level(const char* level_str, unsigned int default_level)
     {
         if (g_strcasecmp(levels[i], level_str) == 0)
         {
-            return i;
+            return (enum logLevels) i;
         }
     }
     return default_level;
@@ -1468,7 +1466,7 @@ main(int argc, char **argv)
     char log_file[256];
     enum logReturns error;
     struct log_config logconfig;
-    unsigned int log_level;
+    enum logLevels log_level;
 
     g_init("xrdp-chansrv"); /* os_calls */
 
@@ -1500,7 +1498,7 @@ main(int argc, char **argv)
     logconfig.fd = -1;
     logconfig.log_level = log_level;
     logconfig.enable_syslog = 0;
-    logconfig.syslog_level = 0;
+    logconfig.syslog_level = LOG_LEVEL_ALWAYS;
     error = log_start_from_param(&logconfig);
 
     if (error != LOG_STARTUP_OK)
@@ -1630,7 +1628,8 @@ struct_from_dvc_chan_id(tui32 dvc_chan_id)
 
     for (i = 0; i < MAX_DVC_CHANNELS; i++)
     {
-        if (g_dvc_channels[i]->dvc_chan_id == dvc_chan_id)
+        if (g_dvc_channels[i]->dvc_chan_id >= 0 &&
+            (tui32) g_dvc_channels[i]->dvc_chan_id == dvc_chan_id)
         {
             return g_dvc_channels[i];
         }
@@ -1646,7 +1645,8 @@ remove_struct_with_chan_id(tui32 dvc_chan_id)
 
     for (i = 0; i < MAX_DVC_CHANNELS; i++)
     {
-        if (g_dvc_channels[i]->dvc_chan_id == dvc_chan_id)
+        if (g_dvc_channels[i]->dvc_chan_id >= 0 &&
+            (tui32) g_dvc_channels[i]->dvc_chan_id == dvc_chan_id)
         {
             g_dvc_channels[i] = NULL;
             return 0;

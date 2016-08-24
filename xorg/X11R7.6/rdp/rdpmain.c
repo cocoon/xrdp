@@ -41,7 +41,7 @@ Sets up the  functions
 #endif
 
 #if XRDP_DISABLE_LINUX_ABSTRACT
-/* because including <X11/Xtrans/Xtransint.h> in problematic
+/* because including <X11/Xtrans/Xtransint.h> is problematic
  * we dup a small struct
  * we need to set flags to zero to turn off abstract sockets */
 struct _MyXtransport
@@ -139,6 +139,8 @@ static miPointerScreenFuncRec g_rdpPointerCursorFuncs =
     rdpPointerNewEventScreen
 };
 
+int glGetBufferSubData(void);
+
 /******************************************************************************/
 /* returns error, zero is good */
 static int
@@ -188,6 +190,11 @@ set_bpp(int bpp)
         g_redBits = 8;
         g_greenBits = 8;
         g_blueBits = 8;
+    }
+    else if (g_bpp == 33)
+    {
+        /* will never happen */
+        glGetBufferSubData();
     }
     else
     {

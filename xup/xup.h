@@ -39,7 +39,7 @@ struct mod
                    tbus param3, tbus param4);
   int (*mod_signal)(struct mod* v);
   int (*mod_end)(struct mod* v);
-  int (*mod_set_param)(struct mod* v, char* name, char* value);
+  int (*mod_set_param)(struct mod* v, const char *name, char* value);
   int (*mod_session_change)(struct mod* v, int, int);
   int (*mod_get_wait_objs)(struct mod* v, tbus* read_objs, int* rcount,
                            tbus* write_objs, int* wcount, int* timeout);
@@ -58,7 +58,7 @@ struct mod
                            int srcx, int srcy);
   int (*server_set_cursor)(struct mod* v, int x, int y, char* data, char* mask);
   int (*server_palette)(struct mod* v, int* palette);
-  int (*server_msg)(struct mod* v, char* msg, int code);
+  int (*server_msg)(struct mod* v, const char *msg, int code);
   int (*server_is_term)(struct mod* v);
   int (*server_set_clip)(struct mod* v, int x, int y, int cx, int cy);
   int (*server_reset_clip)(struct mod* v);
@@ -66,7 +66,7 @@ struct mod
   int (*server_set_bgcolor)(struct mod* v, int bgcolor);
   int (*server_set_opcode)(struct mod* v, int opcode);
   int (*server_set_mixmode)(struct mod* v, int mixmode);
-  int (*server_set_brush)(struct mod* v, int x_orgin, int y_orgin,
+  int (*server_set_brush)(struct mod* v, int x_origin, int y_origin,
                           int style, char* pattern);
   int (*server_set_pen)(struct mod* v, int style,
                         int width);
@@ -84,7 +84,7 @@ struct mod
   int (*server_query_channel)(struct mod* v, int index,
                               char* channel_name,
                               int* channel_flags);
-  int (*server_get_channel_id)(struct mod* v, char* name);
+  int (*server_get_channel_id)(struct mod* v, const char *name);
   int (*server_send_to_channel)(struct mod* v, int channel_id,
                                 char* data, int data_len,
                                 int total_data_len, int flags);

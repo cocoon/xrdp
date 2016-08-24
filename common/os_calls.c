@@ -136,7 +136,21 @@ g_init(const char *app_name)
 
     WSAStartup(2, &wsadata);
 #endif
-    setlocale(LC_CTYPE, "");
+
+    /* In order to get g_mbstowcs and g_wcstombs to work properly with
+       UTF-8 non-ASCII characters, LC_CTYPE cannot be "C" or blank.
+       To select UTF-8 encoding without specifying any countries/languages,
+       "C.UTF-8" is used but provided in few systems.
+
+       See also: https://sourceware.org/glibc/wiki/Proposals/C.UTF-8 */
+    char *lc_ctype;
+    lc_ctype = setlocale(LC_CTYPE, "C.UTF-8");
+    if (lc_ctype == NULL)
+    {
+        /* use en_US.UTF-8 instead if not available */
+        setlocale(LC_CTYPE, "en_US.UTF-8");
+    }
+
     g_mk_temp_dir(app_name);
 }
 
@@ -207,14 +221,17 @@ g_sprintf(char *dest, const char *format, ...)
 }
 
 /*****************************************************************************/
-void DEFAULT_CC
+int DEFAULT_CC
 g_snprintf(char *dest, int len, const char *format, ...)
 {
+    int err;
     va_list ap;
 
     va_start(ap, format);
-    vsnprintf(dest, len, format, ap);
+    err = vsnprintf(dest, len, format, ap);
     va_end(ap);
+
+    return err;
 }
 
 /*****************************************************************************/
@@ -282,7 +299,7 @@ g_hexdump(char *p, int len)
             g_printf("%c", (line[i] >= 0x20 && line[i] < 0x7f) ? line[i] : '.');
         }
 
-        g_writeln("");
+        g_writeln("%s", "");
         offset += thisline;
         line += thisline;
     }
@@ -399,7 +416,7 @@ g_tcp_set_keepalive(int sck)
 
 /*****************************************************************************/
 /* returns a newly created socket or -1 on error */
-/* in win32 a socket is an unsigned int, in linux, its an int */
+/* in win32 a socket is an unsigned int, in linux, it's an int */
 int APP_CC
 g_tcp_socket(void)
 {
@@ -693,6 +710,11 @@ g_tcp_connect(int sck, const char *address, const char *port)
     {
         res = getaddrinfo(address, port, &p, &h);
     }
+    if (res != 0)
+    {
+        log_message(LOG_LEVEL_ERROR, "g_tcp_connect: getaddrinfo() failed: %s",
+                    gai_strerror(res));
+    }
     if (res > -1)
     {
         if (h != NULL)
@@ -715,31 +737,31 @@ g_tcp_connect(int sck, const char *address, const char *port)
 int APP_CC
 g_tcp_connect(int sck, const char* address, const char* port)
 {
-  struct sockaddr_in s;
-  struct hostent* h;
+    struct sockaddr_in s;
+    struct hostent* h;
 
-  g_memset(&s, 0, sizeof(struct sockaddr_in));
-  s.sin_family = AF_INET;
-  s.sin_port = htons((tui16)atoi(port));
-  s.sin_addr.s_addr = inet_addr(address);
-  if (s.sin_addr.s_addr == INADDR_NONE)
-  {
-    h = gethostbyname(address);
-    if (h != 0)
+    g_memset(&s, 0, sizeof(struct sockaddr_in));
+    s.sin_family = AF_INET;
+    s.sin_port = htons((tui16)atoi(port));
+    s.sin_addr.s_addr = inet_addr(address);
+    if (s.sin_addr.s_addr == INADDR_NONE)
     {
-      if (h->h_name != 0)
-      {
-        if (h->h_addr_list != 0)
+        h = gethostbyname(address);
+        if (h != 0)
         {
-          if ((*(h->h_addr_list)) != 0)
-          {
-            s.sin_addr.s_addr = *((int*)(*(h->h_addr_list)));
-          }
+            if (h->h_name != 0)
+            {
+                if (h->h_addr_list != 0)
+                {
+                    if ((*(h->h_addr_list)) != 0)
+                    {
+                        s.sin_addr.s_addr = *((int*)(*(h->h_addr_list)));
+                    }
+                }
+            }
         }
-      }
     }
-  }
-  return connect(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_in));
+    return connect(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_in));
 }
 #endif
 
@@ -896,13 +918,13 @@ g_tcp_bind(int sck, const char *port)
 int APP_CC
 g_tcp_bind(int sck, const char* port)
 {
-  struct sockaddr_in s;
+    struct sockaddr_in s;
 
-  memset(&s, 0, sizeof(struct sockaddr_in));
-  s.sin_family = AF_INET;
-  s.sin_port = htons((tui16)atoi(port));
-  s.sin_addr.s_addr = INADDR_ANY;
-  return bind(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_in));
+    memset(&s, 0, sizeof(struct sockaddr_in));
+    s.sin_family = AF_INET;
+    s.sin_port = htons((tui16)atoi(port));
+    s.sin_addr.s_addr = INADDR_ANY;
+    return bind(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_in));
 }
 #endif
 
@@ -939,17 +961,17 @@ g_tcp_bind_address(int sck, const char *port, const char *address)
 int APP_CC
 g_tcp_bind_address(int sck, const char* port, const char* address)
 {
-  struct sockaddr_in s;
+    struct sockaddr_in s;
 
-  memset(&s, 0, sizeof(struct sockaddr_in));
-  s.sin_family = AF_INET;
-  s.sin_port = htons((tui16)atoi(port));
-  s.sin_addr.s_addr = INADDR_ANY;
-  if (inet_aton(address, &s.sin_addr) < 0)
-  {
-    return -1; /* bad address */
-  }
-  return bind(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_in));
+    memset(&s, 0, sizeof(struct sockaddr_in));
+    s.sin_family = AF_INET;
+    s.sin_port = htons((tui16)atoi(port));
+    s.sin_addr.s_addr = INADDR_ANY;
+    if (inet_aton(address, &s.sin_addr) < 0)
+    {
+        return -1; /* bad address */
+    }
+    return bind(sck, (struct sockaddr*)&s, sizeof(struct sockaddr_in));
 }
 #endif
 
@@ -979,9 +1001,9 @@ g_tcp_accept(int sck)
     ret = accept(sck, (struct sockaddr *)&s, &i);
     if(ret>0)
     {
-        snprintf(ipAddr,255,"A connection received from: %s port %d"
-        ,inet_ntoa(s.sin_addr),ntohs(s.sin_port));
-        log_message(LOG_LEVEL_INFO,ipAddr);
+        snprintf(ipAddr, 255, "A connection received from: %s port %d",
+                 inet_ntoa(s.sin_addr), ntohs(s.sin_port));
+        log_message(LOG_LEVEL_INFO, "%s", ipAddr);
     }
     return ret ;
 }
@@ -1006,7 +1028,7 @@ g_sck_accept(int sck, char *addr, int addr_bytes, char *port, int port_bytes)
     {
         g_snprintf(ipAddr, 255, "A connection received from: %s port %d",
                    inet_ntoa(s.sin_addr), ntohs(s.sin_port));
-        log_message(LOG_LEVEL_INFO,ipAddr);
+        log_message(LOG_LEVEL_INFO, "%s", ipAddr);
         if (s.sin_family == AF_INET)
         {
             g_snprintf(addr, addr_bytes, "%s", inet_ntoa(s.sin_addr));
@@ -1805,7 +1827,7 @@ g_file_read(int fd, char *ptr, int len)
 /*****************************************************************************/
 /* write to file, returns the number of bytes written or -1 on error */
 int APP_CC
-g_file_write(int fd, char *ptr, int len)
+g_file_write(int fd, const char *ptr, int len)
 {
 #if defined(_WIN32)
 
@@ -1942,7 +1964,7 @@ g_get_current_dir(char *dirname, int maxlen)
 /*****************************************************************************/
 /* returns error, zero on success and -1 on failure */
 int APP_CC
-g_set_current_dir(char *dirname)
+g_set_current_dir(const char *dirname)
 {
 #if defined(_WIN32)
 
@@ -2111,7 +2133,7 @@ g_strlen(const char *text)
 
 /*****************************************************************************/
 /* locates char in text */
-char* APP_CC
+const char *APP_CC
 g_strchr(const char* text, int c)
 {
     if (text == NULL)
@@ -2200,6 +2222,7 @@ g_strdup(const char *in)
 
     return p;
 }
+
 /*****************************************************************************/
 /* if in = 0, return 0 else return newly alloced copy of input string
  * if the input string is larger than maxlen the returned string will be
@@ -2207,7 +2230,7 @@ g_strdup(const char *in)
 char *APP_CC
 g_strndup(const char *in, const unsigned int maxlen)
 {
-    int len;
+    unsigned int len;
     char *p;
 
     if (in == 0)
@@ -2231,6 +2254,7 @@ g_strndup(const char *in, const unsigned int maxlen)
 
     return p;
 }
+
 /*****************************************************************************/
 int APP_CC
 g_strcmp(const char *c1, const char *c2)
@@ -2253,10 +2277,12 @@ g_strncmp_d(const char *s1, const char *s2, const char delim, int n)
     char c1;
     char c2;
 
+    c1 = 0;
+    c2 = 0;
     while (n > 0)
     {
-        c1 = *s1++;
-        c2 = *s2++;
+        c1 = *(s1++);
+        c2 = *(s2++);
         if ((c1 == 0) || (c1 != c2) || (c1 == delim) || (c2 == delim))
         {
             return c1 - c2;
@@ -2386,7 +2412,7 @@ g_htoi(char *str)
 int APP_CC
 g_pos(const char *str, const char *to_find)
 {
-    char *pp;
+    const char *pp;
 
     pp = strstr(str, to_find);
 
@@ -2984,10 +3010,11 @@ g_sigterm(int pid)
 
 /*****************************************************************************/
 /* returns 0 if ok */
+/* the caller is responsible to free the buffs */
 /* does not work in win32 */
 int APP_CC
-g_getuser_info(const char *username, int *gid, int *uid, char *shell,
-               char *dir, char *gecos)
+g_getuser_info(const char *username, int *gid, int *uid, char **shell,
+               char **dir, char **gecos)
 {
 #if defined(_WIN32)
     return 1;
@@ -3010,17 +3037,17 @@ g_getuser_info(const char *username, int *gid, int *uid, char *shell,
 
         if (dir != 0)
         {
-            g_strcpy(dir, pwd_1->pw_dir);
+            *dir = g_strdup(pwd_1->pw_dir);
         }
 
         if (shell != 0)
         {
-            g_strcpy(shell, pwd_1->pw_shell);
+            *shell = g_strdup(pwd_1->pw_shell);
         }
 
         if (gecos != 0)
         {
-            g_strcpy(gecos, pwd_1->pw_gecos);
+            *gecos = g_strdup(pwd_1->pw_gecos);
         }
 
         return 0;
@@ -3254,7 +3281,7 @@ g_save_to_bmp(const char* filename, char* data, int stride_bytes,
     data -= stride_bytes;
     if ((depth == 24) && (bits_per_pixel == 32))
     {
-        line = malloc(file_stride_bytes);
+        line = (char *) malloc(file_stride_bytes);
         memset(line, 0, file_stride_bytes);
         for (index = 0; index < height; index++)
         {

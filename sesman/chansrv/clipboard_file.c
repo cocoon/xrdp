@@ -102,6 +102,7 @@ static int g_file_request_sent_type = 0;
 #define CB_EPOCH_DIFF 11644473600LL
 
 /*****************************************************************************/
+#if 0
 static tui64 APP_CC
 timeval2wintime(struct timeval *tv)
 {
@@ -113,6 +114,7 @@ timeval2wintime(struct timeval *tv)
     result += tv->tv_usec * 10;
     return result;
 }
+#endif
 
 /*****************************************************************************/
 /* this will replace %20 or any hex with the space or correct char
@@ -529,7 +531,6 @@ clipboard_process_file_request(struct stream *s, int clip_msg_status,
     int lindex;
     int dwFlags;
     int nPositionLow;
-    int nPositionHigh;
     int cbRequested;
     //int clipDataId;
 
@@ -539,7 +540,7 @@ clipboard_process_file_request(struct stream *s, int clip_msg_status,
     in_uint32_le(s, lindex);
     in_uint32_le(s, dwFlags);
     in_uint32_le(s, nPositionLow);
-    in_uint32_le(s, nPositionHigh);
+    in_uint8s(s, 4); /* nPositionHigh */
     in_uint32_le(s, cbRequested);
     //in_uint32_le(s, clipDataId); /* options, used when locking */
     if (dwFlags & CB_FILECONTENTS_SIZE)
@@ -659,7 +660,11 @@ clipboard_c2s_in_files(struct stream *s, char *file_list)
                        "supported [%s]", cfd->cFileName);
             continue;
         }
-        xfuse_add_clip_dir_item(cfd->cFileName, 0, cfd->fileSizeLow, lindex);
+        if (xfuse_add_clip_dir_item(cfd->cFileName, 0, cfd->fileSizeLow, lindex) == -1)
+        {
+            log_error("clipboard_c2s_in_files: failed to add clip dir item");
+            continue;
+        }
 
         if (file_count > 0)
         {

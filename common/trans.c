@@ -28,7 +28,7 @@
 
 /*****************************************************************************/
 int APP_CC
-trans_tls_recv(struct trans *self, void *ptr, int len)
+trans_tls_recv(struct trans *self, char *ptr, int len)
 {
     if (self->tls == NULL)
     {
@@ -39,7 +39,7 @@ trans_tls_recv(struct trans *self, void *ptr, int len)
 
 /*****************************************************************************/
 int APP_CC
-trans_tls_send(struct trans *self, const void *data, int len)
+trans_tls_send(struct trans *self, const char *data, int len)
 {
     if (self->tls == NULL)
     {
@@ -61,14 +61,14 @@ trans_tls_can_recv(struct trans *self, int sck, int millis)
 
 /*****************************************************************************/
 int APP_CC
-trans_tcp_recv(struct trans *self, void *ptr, int len)
+trans_tcp_recv(struct trans *self, char *ptr, int len)
 {
     return g_tcp_recv(self->sck, ptr, len, 0);
 }
 
 /*****************************************************************************/
 int APP_CC
-trans_tcp_send(struct trans *self, const void *data, int len)
+trans_tcp_send(struct trans *self, const char *data, int len)
 {
     return g_tcp_send(self->sck, data, len, 0);
 }
@@ -330,7 +330,7 @@ trans_check_wait_objs(struct trans *self)
                               sizeof(self->addr) - 1);
                     g_strncpy(in_trans->port, self->port,
                               sizeof(self->port) - 1);
-
+                    g_sck_set_non_blocking(in_sck);
                     if (self->trans_conn_in(self, in_trans) != 0)
                     {
                         trans_delete(in_trans);
@@ -442,45 +442,42 @@ trans_force_read_s(struct trans *self, struct stream *in_s, int size)
         {
             return 1;
         }
-        if (self->trans_can_recv(self, self->sck, 100))
+        rcvd = self->trans_recv(self, in_s->end, size);
+        if (rcvd == -1)
         {
-            rcvd = self->trans_recv(self, in_s->end, size);
-            if (rcvd == -1)
+            if (g_tcp_last_error_would_block(self->sck))
             {
-                if (g_tcp_last_error_would_block(self->sck))
+                if (!self->trans_can_recv(self, self->sck, 100))
                 {
-                }
-                else
-                {
-                    /* error */
-                    self->status = TRANS_STATUS_DOWN;
-                    return 1;
+                    /* check for term here */
+                    if (self->is_term != 0)
+                    {
+                        if (self->is_term())
+                        {
+                            /* term */
+                            self->status = TRANS_STATUS_DOWN;
+                            return 1;
+                        }
+                    }
                 }
             }
-            else if (rcvd == 0)
+            else
             {
                 /* error */
                 self->status = TRANS_STATUS_DOWN;
                 return 1;
             }
-            else
-            {
-                in_s->end += rcvd;
-                size -= rcvd;
-            }
+        }
+        else if (rcvd == 0)
+        {
+            /* error */
+            self->status = TRANS_STATUS_DOWN;
+            return 1;
         }
         else
         {
-            /* check for term here */
-            if (self->is_term != 0)
-            {
-                if (self->is_term())
-                {
-                    /* term */
-                    self->status = TRANS_STATUS_DOWN;
-                    return 1;
-                }
-            }
+            in_s->end += rcvd;
+            size -= rcvd;
         }
     }
     return 0;
@@ -514,44 +511,41 @@ trans_force_write_s(struct trans *self, struct stream *out_s)
     }
     while (total < size)
     {
-        if (g_tcp_can_send(self->sck, 100))
+        sent = self->trans_send(self, out_s->data + total, size - total);
+        if (sent == -1)
         {
-            sent = self->trans_send(self, out_s->data + total, size - total);
-            if (sent == -1)
+            if (g_tcp_last_error_would_block(self->sck))
             {
-                if (g_tcp_last_error_would_block(self->sck))
+                if (!g_tcp_can_send(self->sck, 100))
                 {
-                }
-                else
-                {
-                    /* error */
-                    self->status = TRANS_STATUS_DOWN;
-                    return 1;
+                    /* check for term here */
+                    if (self->is_term != 0)
+                    {
+                        if (self->is_term())
+                        {
+                            /* term */
+                            self->status = TRANS_STATUS_DOWN;
+                            return 1;
+                        }
+                    }
                 }
             }
-            else if (sent == 0)
+            else
             {
                 /* error */
                 self->status = TRANS_STATUS_DOWN;
                 return 1;
             }
-            else
-            {
-                total = total + sent;
-            }
+        }
+        else if (sent == 0)
+        {
+            /* error */
+            self->status = TRANS_STATUS_DOWN;
+            return 1;
         }
         else
         {
-            /* check for term here */
-            if (self->is_term != 0)
-            {
-                if (self->is_term())
-                {
-                    /* term */
-                    self->status = TRANS_STATUS_DOWN;
-                    return 1;
-                }
-            }
+            total = total + sent;
         }
     }
     return 0;

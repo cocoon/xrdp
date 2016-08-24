@@ -636,7 +636,7 @@ void dev_redir_proc_client_core_cap_resp(struct stream *s)
 
 void devredir_proc_client_devlist_announce_req(struct stream *s)
 {
-    int   i;
+    unsigned int i;
     int   j;
     tui32 device_count;
     tui32 device_type;
@@ -890,24 +890,16 @@ dev_redir_proc_query_dir_response(IRP *irp,
     XRDP_INODE *xinode;
 
     tui32 Length;
-    tui32 NextEntryOffset;
     tui64 CreationTime;
     tui64 LastAccessTime;
     tui64 LastWriteTime;
-    tui64 ChangeTime;
     tui64 EndOfFile;
     tui32 FileAttributes;
     tui32 FileNameLength;
     tui32 status;
 
-#ifdef USE_SHORT_NAMES_IN_DIR_LISTING
-    tui32 EaSize;
-    tui8  ShortNameLength;
-    tui8  Reserved;
-#endif
-
     char  filename[256];
-    int   i = 0;
+    unsigned int i = 0;
 
     xstream_rd_u32_le(s_in, Length);
 
@@ -935,21 +927,21 @@ dev_redir_proc_query_dir_response(IRP *irp,
     {
         log_debug("processing FILE_DIRECTORY_INFORMATION structs");
 
-        xstream_rd_u32_le(s_in, NextEntryOffset);
+        xstream_seek(s_in, 4);  /* NextEntryOffset */
         xstream_seek(s_in, 4);  /* FileIndex */
         xstream_rd_u64_le(s_in, CreationTime);
         xstream_rd_u64_le(s_in, LastAccessTime);
         xstream_rd_u64_le(s_in, LastWriteTime);
-        xstream_rd_u64_le(s_in, ChangeTime);
+        xstream_seek(s_in, 8);  /* ChangeTime */
         xstream_rd_u64_le(s_in, EndOfFile);
         xstream_seek(s_in, 8);  /* AllocationSize */
         xstream_rd_u32_le(s_in, FileAttributes);
         xstream_rd_u32_le(s_in, FileNameLength);
 
 #ifdef USE_SHORT_NAMES_IN_DIR_LISTING
-        xstream_rd_u32_le(s_in, EaSize);
-        xstream_rd_u8(s_in, ShortNameLength);
-        xstream_rd_u8(s_in, Reserved);
+        xstream_seek(s_in, 4); /* EaSize */
+        xstream_seek(s_in, 1); /* ShortNameLength */
+        xstream_seek(s_in, 1); /* Reserved */
         xstream_seek(s_in, 23);  /* ShortName in Unicode */
 #endif
         devredir_cvt_from_unicode_len(filename, s_in->p, FileNameLength);
@@ -959,11 +951,9 @@ dev_redir_proc_query_dir_response(IRP *irp,
 #else
         i += 64 + FileNameLength;
 #endif
-        //log_debug("NextEntryOffset:   0x%x", NextEntryOffset);
         //log_debug("CreationTime:      0x%llx", CreationTime);
         //log_debug("LastAccessTime:    0x%llx", LastAccessTime);
         //log_debug("LastWriteTime:     0x%llx", LastWriteTime);
-        //log_debug("ChangeTime:        0x%llx", ChangeTime);
         //log_debug("EndOfFile:         %lld", EndOfFile);
         //log_debug("FileAttributes:    0x%x", FileAttributes);
 #ifdef USE_SHORT_NAMES_IN_DIR_LISTING
@@ -972,7 +962,8 @@ dev_redir_proc_query_dir_response(IRP *irp,
         //log_debug("FileNameLength:    %d", FileNameLength);
         log_debug("FileName:          %s", filename);
 
-        if ((xinode = calloc(1, sizeof(struct xrdp_inode))) == NULL)
+        xinode = g_new0(struct xrdp_inode, 1);
+        if (xinode == NULL)
         {
             log_error("system out of memory");
             fuse_data = devredir_fuse_data_peek(irp);
@@ -1265,7 +1256,7 @@ devredir_file_read(void *fusep, tui32 DeviceId, tui32 FileId,
 
 int APP_CC
 dev_redir_file_write(void *fusep, tui32 DeviceId, tui32 FileId,
-                     const char *buf, tui32 Length, tui64 Offset)
+                     const char *buf, int Length, tui64 Offset)
 {
     struct stream *s;
     IRP           *irp;
@@ -1330,7 +1321,7 @@ dev_redir_file_write(void *fusep, tui32 DeviceId, tui32 FileId,
  * @return FUSE_DATA on success, or NULL on failure
  *****************************************************************************/
 
-void * APP_CC
+FUSE_DATA *APP_CC
 devredir_fuse_data_peek(IRP *irp)
 {
     log_debug("returning %p", irp->fd_head);
@@ -1343,7 +1334,7 @@ devredir_fuse_data_peek(IRP *irp)
  * @return FUSE_DATA on success, NULL on failure
  *****************************************************************************/
 
-void * APP_CC
+FUSE_DATA *APP_CC
 devredir_fuse_data_dequeue(IRP *irp)
 {
     FUSE_DATA *head;
@@ -1388,7 +1379,8 @@ devredir_fuse_data_enqueue(IRP *irp, void *vp)
     if (irp == NULL)
         return -1;
 
-    if ((fd = calloc(1, sizeof(FUSE_DATA))) == NULL)
+    fd = g_new0(FUSE_DATA, 1);
+    if (fd == NULL)
         return -1;
 
     fd->data_ptr = vp;
@@ -1484,7 +1476,6 @@ devredir_cvt_from_unicode_len(char *path, char *unicode, int len)
     char *dest;
     char *dest_saved;
     char *src;
-    int   rv;
     int   i;
     int   bytes_to_alloc;
     int   max_bytes;
@@ -1492,7 +1483,7 @@ devredir_cvt_from_unicode_len(char *path, char *unicode, int len)
     bytes_to_alloc = (((len / 2) * sizeof(twchar)) + sizeof(twchar));
 
     src = unicode;
-    dest = g_malloc(bytes_to_alloc, 1);
+    dest = g_new0(char, bytes_to_alloc);
     dest_saved = dest;
 
     for (i = 0; i < len; i += 2)
@@ -1509,7 +1500,7 @@ devredir_cvt_from_unicode_len(char *path, char *unicode, int len)
     max_bytes = wcstombs(NULL, (wchar_t *) dest_saved, 0);
     if (max_bytes > 0)
     {
-        rv = wcstombs(path, (wchar_t *) dest_saved, max_bytes);
+        wcstombs(path, (wchar_t *) dest_saved, max_bytes);
         path[max_bytes] = 0;
     }
 

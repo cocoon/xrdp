@@ -42,7 +42,7 @@ struct xrdp_mod
                    long param3, long param4);
   int (*mod_signal)(struct xrdp_mod* v);
   int (*mod_end)(struct xrdp_mod* v);
-  int (*mod_set_param)(struct xrdp_mod* v, char* name, char* value);
+  int (*mod_set_param)(struct xrdp_mod* v, const char *name, char* value);
   int (*mod_session_change)(struct xrdp_mod* v, int, int);
   int (*mod_get_wait_objs)(struct xrdp_mod* v, tbus* read_objs, int* rcount,
                            tbus* write_objs, int* wcount, int* timeout);
@@ -70,7 +70,7 @@ struct xrdp_mod
   int (*server_set_bgcolor)(struct xrdp_mod* v, int bgcolor);
   int (*server_set_opcode)(struct xrdp_mod* v, int opcode);
   int (*server_set_mixmode)(struct xrdp_mod* v, int mixmode);
-  int (*server_set_brush)(struct xrdp_mod* v, int x_orgin, int y_orgin,
+  int (*server_set_brush)(struct xrdp_mod* v, int x_origin, int y_origin,
                           int style, char* pattern);
   int (*server_set_pen)(struct xrdp_mod* v, int style,
                         int width);
@@ -88,7 +88,7 @@ struct xrdp_mod
   int (*server_query_channel)(struct xrdp_mod* v, int index,
                               char* channel_name,
                               int* channel_flags);
-  int (*server_get_channel_id)(struct xrdp_mod* v, char* name);
+  int (*server_get_channel_id)(struct xrdp_mod* v, const char *name);
   int (*server_send_to_channel)(struct xrdp_mod* v, int channel_id,
                                 char* data, int data_len,
                                 int total_data_len, int flags);
@@ -216,7 +216,7 @@ struct xrdp_brush_item
 {
   int stamp;
   /* expand this to a structure to handle more complicated brushes
-     for now its 8x8 1bpp brushes only */
+     for now it's 8x8 1bpp brushes only */
   char pattern[8];
 };
 
@@ -411,7 +411,7 @@ struct xrdp_listen
 struct xrdp_region
 {
   struct xrdp_wm* wm; /* owner */
-  struct list* rects;
+  struct pixman_region16 *reg;
 };
 
 /* painter */

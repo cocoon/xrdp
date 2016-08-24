@@ -37,7 +37,6 @@
 #define SESMAN_CFG_PORT              "ListenPort"
 #define SESMAN_CFG_ENABLE_USERWM     "EnableUserWindowManager"
 #define SESMAN_CFG_USERWM            "UserWindowManager"
-#define SESMAN_CFG_X11DISPLAYOFFSET  "X11DisplayOffset"
 #define SESMAN_CFG_MAX_SESSION       "MaxSessions"
 #define SESMAN_CFG_AUTH_FILE_PATH    "AuthFilePath"
 
@@ -66,6 +65,7 @@
 #define SESMAN_CFG_SESS_KILL_DISC    "KillDisconnected"
 #define SESMAN_CFG_SESS_IDLE_LIMIT   "IdleTimeLimit"
 #define SESMAN_CFG_SESS_DISC_LIMIT   "DisconnectedTimeLimit"
+#define SESMAN_CFG_SESS_X11DISPLAYOFFSET "X11DisplayOffset"
 
 #define SESMAN_CFG_SESS_POLICY_S "Policy"
 #define SESMAN_CFG_SESS_POLICY_DFLT_S "Default"
@@ -220,16 +220,14 @@ struct config_sesman
    */
   struct list* rdp_params;
   /**
-   * @var log
-   * @brief Log configuration struct
+   * @var xorg_params
+   * @brief Xorg additional parameter list
    */
-
   struct list* xorg_params;
   /**
    * @var log
    * @brief Log configuration struct
    */
-
   //struct log_config log;
   /**
    * @var sec

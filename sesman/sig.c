@@ -75,7 +75,7 @@ sig_sesman_reload_cfg(int sig)
         return;
     }
 
-    cfg = g_malloc(sizeof(struct config_sesman), 1);
+    cfg = g_new0(struct config_sesman, 1);
 
     if (0 == cfg)
     {
@@ -158,7 +158,6 @@ sig_handler_thread(void *arg)
     sigaddset(&waitmask, SIGHUP);
     sigaddset(&waitmask, SIGCHLD);
     sigaddset(&waitmask, SIGTERM);
-    sigaddset(&waitmask, SIGKILL);
     sigaddset(&waitmask, SIGINT);
 
     //  sigaddset(&waitmask, SIGFPE);
@@ -186,11 +185,6 @@ sig_handler_thread(void *arg)
             case SIGINT:
                 /* we die */
                 LOG_DBG("sesman received SIGINT", 0);
-                sig_sesman_shutdown(recv_signal);
-                break;
-            case SIGKILL:
-                /* we die */
-                LOG_DBG("sesman received SIGKILL", 0);
                 sig_sesman_shutdown(recv_signal);
                 break;
             case SIGTERM:

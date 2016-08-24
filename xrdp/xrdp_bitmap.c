@@ -38,7 +38,7 @@
   while (0)
 
 
-static const int g_crc_table[256] =
+static const unsigned int g_crc_table[256] =
 {
     0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
     0xe963a535, 0x9e6495a3, 0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
@@ -1254,8 +1254,8 @@ xrdp_bitmap_draw_focus_box(struct xrdp_bitmap *self,
     painter->brush.pattern[5] = 0x55;
     painter->brush.pattern[6] = 0xaa;
     painter->brush.pattern[7] = 0x55;
-    painter->brush.x_orgin = x;
-    painter->brush.x_orgin = x;
+    painter->brush.x_origin = x;
+    painter->brush.x_origin = x;
     painter->brush.style = 3;
     painter->fg_color = self->wm->black;
     painter->bg_color = self->parent->bg_color;

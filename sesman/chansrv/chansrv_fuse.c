@@ -39,8 +39,6 @@
 
 //#define USE_SYNC_FLAG
 
-static char g_fuse_mount_name[256] = "xrdp_client";
-
 /* FUSE mount point */
 char g_fuse_root_path[256] = "";
 char g_fuse_clipboard_path[256] = ""; /* for clipboard use */
@@ -239,6 +237,8 @@ struct opendir_req
     struct fuse_file_info *fi;
 };
 
+static char g_fuse_mount_name[256] = "xrdp_client";
+
 FIFO g_fifo_opendir;
 
 static struct list *g_req_list = 0;
@@ -295,7 +295,7 @@ int devredir_file_read(void *fusep, tui32 device_id, tui32 FileId,
                         tui32 Length, tui64 Offset);
 
 int dev_redir_file_write(void *fusep, tui32 device_id, tui32 FileId,
-                         const char *buf, tui32 Length, tui64 Offset);
+                         const char *buf, int Length, tui64 Offset);
 
 int devredir_file_close(void *fusep, tui32 device_id, tui32 FileId);
 
@@ -780,6 +780,11 @@ int xfuse_add_clip_dir_item(char *filename, int flags, int size, int lindex)
                                                       2,    /* parent inode */
                                                       filename,
                                                       S_IFREG);
+    if (xinode == NULL)
+    {
+        log_debug("failed to create file in xrdp filesystem");
+        return -1;
+    }
     xinode->size = size;
     xinode->lindex = lindex;
     xinode->is_loc_resource = 1;

@@ -385,7 +385,7 @@ main(int argc, char **argv)
     {
         g_writeln("Unknown Parameter");
         g_writeln("xrdp -h for help");
-        g_writeln("");
+        g_writeln("%s", "");
         g_deinit();
         g_exit(0);
     }
@@ -395,30 +395,30 @@ main(int argc, char **argv)
 
     if (startup_params->help)
     {
-        g_writeln("");
+        g_writeln("%s", "");
         g_writeln("xrdp: A Remote Desktop Protocol server.");
         g_writeln("Copyright (C) Jay Sorg 2004-2014");
         g_writeln("See http://www.xrdp.org for more information.");
-        g_writeln("");
+        g_writeln("%s", "");
         g_writeln("Usage: xrdp [options]");
         g_writeln("   --help: show help");
         g_writeln("   --nodaemon: don't fork into background");
         g_writeln("   --kill: shut down xrdp");
         g_writeln("   --port: tcp listen port");
         g_writeln("   --fork: fork on new connection");
-        g_writeln("");
+        g_writeln("%s", "");
         g_deinit();
         g_exit(0);
     }
 
     if (startup_params->version)
     {
-        g_writeln("");
+        g_writeln("%s", "");
         g_writeln("xrdp: A Remote Desktop Protocol server.");
         g_writeln("Copyright (C) Jay Sorg 2004-2014");
         g_writeln("See http://www.xrdp.org for more information.");
         g_writeln("Version %s", PACKAGE_VERSION);
-        g_writeln("");
+        g_writeln("%s", "");
         g_deinit();
         g_exit(0);
     }
@@ -443,8 +443,7 @@ main(int argc, char **argv)
 
         if (fd == -1)
         {
-            g_writeln("problem opening to xrdp.pid [%s]", pid_file);
-            g_writeln("maybe its not running");
+            g_writeln("cannot open %s, maybe xrdp is not running", pid_file);
         }
         else
         {
@@ -598,6 +597,7 @@ main(int argc, char **argv)
     g_sync_mutex = tc_mutex_create();
     g_sync1_mutex = tc_mutex_create();
     pid = g_getpid();
+    log_message(LOG_LEVEL_INFO, "starting xrdp with pid %d", pid);
     g_snprintf(text, 255, "xrdp_%8.8x_main_term", pid);
     g_term_event = g_create_wait_obj(text);
 
