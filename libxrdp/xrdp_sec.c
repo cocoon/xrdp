@@ -236,7 +236,9 @@ xrdp_load_keyboard_layout(struct xrdp_client_info *client_info)
     char keyboard_cfg_file[256] = { 0 };
     char rdp_layout[256] = { 0 };
 
-    LLOGLN(0, ("xrdp_load_keyboard_layout:"));
+    LLOGLN(0, ("xrdp_load_keyboard_layout: keyboard_type [%d] keyboard_subtype [%d]",
+               client_info->keyboard_type, client_info->keyboard_subtype));
+
     /* infer model/variant */
     /* TODO specify different X11 keyboard models/variants */
     g_memset(client_info->model, 0, sizeof(client_info->model));
@@ -338,6 +340,15 @@ xrdp_load_keyboard_layout(struct xrdp_client_info *client_info)
                             g_strncpy(client_info->variant, value, bytes - 1);
                         }
                     }
+                    else if (g_strcasecmp(item, "options") == 0)
+                    {
+                        if (section_found != -1 && section_found == index)
+                        {
+                            bytes = sizeof(client_info->options);
+                            g_memset(client_info->options, 0, bytes);
+                            g_strncpy(client_info->options, value, bytes - 1);
+                        }
+                    }
                     else
                     {
                         /*
@@ -413,8 +424,8 @@ xrdp_load_keyboard_layout(struct xrdp_client_info *client_info)
         list_delete(values);
 
         LLOGLN(0, ("xrdp_load_keyboard_layout: model [%s] variant [%s] "
-               "layout [%s]", client_info->model, client_info->variant,
-               client_info->layout));
+               "layout [%s] options [%s]", client_info->model,
+               client_info->variant, client_info->layout, client_info->options));
         g_file_close(fd);
     }
     else
@@ -2236,7 +2247,9 @@ xrdp_sec_incoming(struct xrdp_sec *self)
 
         if (trans_set_tls_mode(self->mcs_layer->iso_layer->trans,
                 self->rdp_layer->client_info.key_file,
-                self->rdp_layer->client_info.certificate) != 0)
+                self->rdp_layer->client_info.certificate,
+                self->rdp_layer->client_info.disableSSLv3,
+                self->rdp_layer->client_info.tls_ciphers) != 0)
         {
             g_writeln("xrdp_sec_incoming: trans_set_tls_mode failed");
             return 1;
