@@ -1464,8 +1464,10 @@ lfreerdp_pre_connect(freerdp *instance)
 
     instance->settings->glyph_cache = true;
     /* GLYPH_SUPPORT_FULL and GLYPH_SUPPORT_PARTIAL seem to be the same */
-    instance->settings->glyphSupportLevel = GLYPH_SUPPORT_FULL;
-
+    /* disabled as workaround for corrupted display like black bars left of cmd */
+    /* instance->settings->glyphSupportLevel = GLYPH_SUPPORT_FULL; */
+    instance->settings->glyphSupportLevel = GLYPH_SUPPORT_NONE;
+    
     instance->settings->order_support[NEG_DSTBLT_INDEX] = 1; /* 0x00 */
     instance->settings->order_support[NEG_PATBLT_INDEX] = 1;
     instance->settings->order_support[NEG_SCRBLT_INDEX] = 1;
@@ -1493,7 +1495,9 @@ lfreerdp_pre_connect(freerdp *instance)
     instance->settings->order_support[NEG_FAST_GLYPH_INDEX] = 0; /* 0x18 */
     instance->settings->order_support[NEG_ELLIPSE_SC_INDEX] = 0;
     instance->settings->order_support[NEG_ELLIPSE_CB_INDEX] = 0;
-    instance->settings->order_support[NEG_GLYPH_INDEX_INDEX] = 1;
+    /* disabled as workaround for corrupted display like black bars left of cmd */
+    /*instance->settings->order_support[NEG_GLYPH_INDEX_INDEX] = 1;*/
+    instance->settings->order_support[NEG_GLYPH_INDEX_INDEX] = 0;
     instance->settings->order_support[NEG_GLYPH_WEXTTEXTOUT_INDEX] = 0;
     instance->settings->order_support[NEG_GLYPH_WLONGTEXTOUT_INDEX] = 0;
     instance->settings->order_support[NEG_GLYPH_WLONGEXTTEXTOUT_INDEX] = 0;
@@ -1524,19 +1528,19 @@ lfreerdp_pre_connect(freerdp *instance)
         instance->settings->remote_app = 1;
         instance->settings->rail_langbar_supported = 1;
         instance->settings->workarea = 1;
-        instance->settings->performance_flags = PERF_DISABLE_WALLPAPER | PERF_DISABLE_FULLWINDOWDRAG;
+        /*instance->settings->performance_flags = PERF_DISABLE_WALLPAPER | PERF_DISABLE_FULLWINDOWDRAG;*/
+        instance->settings->performance_flags = PERF_DISABLE_FULLWINDOWDRAG | PERF_DISABLE_CURSORSETTINGS;
         instance->settings->num_icon_caches = mod->client_info.wnd_num_icon_caches;
         instance->settings->num_icon_cache_entries = mod->client_info.wnd_num_icon_cache_entries;
-
-
     }
     else
     {
         LLOGLN(10, ("Special PerformanceFlags changed"));
-        instance->settings->performance_flags = PERF_DISABLE_WALLPAPER |
-                                                PERF_DISABLE_FULLWINDOWDRAG | PERF_DISABLE_MENUANIMATIONS |
+        /*instance->settings->performance_flags = PERF_DISABLE_WALLPAPER |
+                                                    PERF_DISABLE_FULLWINDOWDRAG | PERF_DISABLE_MENUANIMATIONS |
                                                 PERF_DISABLE_THEMING;
-        // | PERF_DISABLE_CURSOR_SHADOW | PERF_DISABLE_CURSORSETTINGS;
+        // | PERF_DISABLE_CURSOR_SHADOW | PERF_DISABLE_CURSORSETTINGS;*/
+        instance->settings->performance_flags = PERF_DISABLE_CURSOR_SHADOW | PERF_DISABLE_CURSORSETTINGS;
     }
 
     instance->settings->compression = 0;
