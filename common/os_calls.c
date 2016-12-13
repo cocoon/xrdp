@@ -681,7 +681,7 @@ g_sck_close(int sck)
                 char addr[48];
                 struct sockaddr_in6 *sock_addr_in6 = &sock_info.sock_addr_in6;
 
-                g_snprintf(sockname, sizeof(sockname), "AF_INET6 %s:%d",
+                g_snprintf(sockname, sizeof(sockname), "AF_INET6 %s port %d",
                            inet_ntop(sock_addr_in6->sin6_family,
                                      &sock_addr_in6->sin6_addr, addr, sizeof(addr)),
                            ntohs(sock_addr_in6->sin6_port));
@@ -2527,6 +2527,34 @@ g_htoi(char *str)
         shift += 4;
     }
 
+    return rv;
+}
+
+/*****************************************************************************/
+/* returns number of bytes copied into out_str */
+int APP_CC
+g_bytes_to_hexstr(const void *bytes, int num_bytes, char *out_str,
+                  int bytes_out_str)
+{
+    int rv;
+    int index;
+    char *lout_str;
+    const tui8 *lbytes;
+
+    rv = 0;
+    lbytes = (const tui8 *) bytes;
+    lout_str = out_str;
+    for (index = 0; index < num_bytes; index++)
+    {
+        if (bytes_out_str < 3)
+        {
+            break;
+        }
+        g_snprintf(lout_str, bytes_out_str, "%2.2x", lbytes[index]);
+        lout_str += 2;
+        bytes_out_str -= 2;
+        rv += 2;
+    }
     return rv;
 }
 
