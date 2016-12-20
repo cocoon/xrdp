@@ -1,4 +1,5 @@
 EXTRA_DIST = \
+   keymap-names.txt \
    xrdp.sh \
    xrdp-sesman.service \
    xrdp.service
@@ -16,6 +17,7 @@ dist_startscript_DATA = \
   km-0000040c.ini \
   km-00000410.ini \
   km-00000411.ini \
+  km-00000412.ini \
   km-00000414.ini \
   km-00000415.ini \
   km-00000416.ini \

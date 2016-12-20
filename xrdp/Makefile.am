@@ -1,3 +1,8 @@
+EXTRA_DIST = \
+  czech.txt \
+  rdp-scan-codes.txt \
+  xrdpwin.c
+
 AM_CPPFLAGS = \
   -DXRDP_CFG_PATH=\"${sysconfdir}/xrdp\" \
   -DXRDP_SBIN_PATH=\"${sbindir}\" \
@@ -19,13 +24,19 @@ endif
 if XRDP_RFXCODEC
 AM_CPPFLAGS += -DXRDP_RFXCODEC
 AM_CPPFLAGS += -I$(top_srcdir)/librfxcodec/include
-XRDP_EXTRA_LIBS += $(top_srcdir)/librfxcodec/src/.libs/librfxencode.a
+XRDP_EXTRA_LIBS += $(top_builddir)/librfxcodec/src/.libs/librfxencode.a
 endif
 
 if XRDP_PIXMAN
 AM_CPPFLAGS += -DXRDP_PIXMAN
 AM_CPPFLAGS += $(PIXMAN_CFLAGS)
 XRDP_EXTRA_LIBS += $(PIXMAN_LIBS)
+endif
+
+if XRDP_PAINTER
+AM_CPPFLAGS += -DXRDP_PAINTER
+AM_CPPFLAGS += -I$(top_srcdir)/libpainter/include
+XRDP_EXTRA_LIBS += $(top_srcdir)/libpainter/src/.libs/libpainter.a
 endif
 
 sbin_PROGRAMS = \

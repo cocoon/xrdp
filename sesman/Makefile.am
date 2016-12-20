@@ -1,3 +1,6 @@
+EXTRA_DIST = \
+  Doxyfile
+
 AM_CPPFLAGS = \
   -DXRDP_CFG_PATH=\"${sysconfdir}/xrdp\" \
   -DXRDP_SBIN_PATH=\"${sbindir}\" \
@@ -54,6 +57,8 @@ xrdp_sesman_SOURCES = \
   session.h \
   sig.c \
   sig.h \
+  xauth.c \
+  xauth.h \
   $(AUTH_C)
 
 xrdp_sesman_LDADD = \

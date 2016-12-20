@@ -284,6 +284,24 @@
 #define RDP_CAPSET_VIRCHAN             20
 #define RDP_CAPLEN_VIRCHAN             0x08
 
+#define RDP_CAPSET_MULTIFRAGMENT       0x001A
+#define RDP_CAPLEN_MULTIFRAGMENT       0x08
+
+#define RDP_CAPSET_FRAME_ACKNOWLEDGE   0x001E
+#define RDP_CAPLEN_FRAME_ACKNOWLEDGE   0x08
+
+#define RDP_CAPSET_SURFCMDS            0x1C
+#define RDP_CAPLEN_SURFCMDS            0x0C
+
+#define RDP_CAPSET_BMPCODECS           0x1D
+#define RDP_CAPLEN_BMPCODECS           0x1C
+
+#define RDP_CAPSET_COMPDESK            0x19
+#define RDP_CAPLEN_COMPDESK            0x06
+
+#define RDP_CAPSET_LPOINTER            0x1B
+#define RDP_CAPLEN_LPOINTER            0x06
+
 #define RDP_SOURCE                     "MSTSC"
 
 /* Logon flags */
@@ -477,6 +495,40 @@
 #define XR_ORDERFLAGS_EX_ALTSEC_FRAME_MARKER_SUPPORT 0x0004
 #define XR_ORDERFLAGS_EX_OFFSCREEN_COMPOSITE_SUPPORT 0x0100
 
+/* orders negotiation indexes */
+#define TS_NEG_DSTBLT_INDEX             0x00
+#define TS_NEG_PATBLT_INDEX             0x01
+#define TS_NEG_SCRBLT_INDEX             0x02
+#define TS_NEG_MEMBLT_INDEX             0x03
+#define TS_NEG_MEM3BLT_INDEX            0x04
+                                     /* 0x05 */
+                                     /* 0x06 */
+#define TS_NEG_DRAWNINEGRID_INDEX       0x07
+#define TS_NEG_LINETO_INDEX             0x08
+#define TS_NEG_MULTI_DRAWNINEGRID_INDEX 0x09
+                                     /* 0x0A */
+#define TS_NEG_SAVEBITMAP_INDEX         0x0B
+                                     /* 0x0C */
+                                     /* 0x0D */
+                                     /* 0x0E */
+#define TS_NEG_MULTIDSTBLT_INDEX        0x0F
+#define TS_NEG_MULTIPATBLT_INDEX        0x10
+#define TS_NEG_MULTISCRBLT_INDEX        0x11
+#define TS_NEG_MULTIOPAQUERECT_INDEX    0x12
+#define TS_NEG_FAST_INDEX_INDEX         0x13
+#define TS_NEG_POLYGON_SC_INDEX         0x14
+#define TS_NEG_POLYGON_CB_INDEX         0x15
+#define TS_NEG_POLYLINE_INDEX           0x16
+                                     /* 0x17 */
+#define TS_NEG_FAST_GLYPH_INDEX         0x18
+#define TS_NEG_ELLIPSE_SC_INDEX         0x19
+#define TS_NEG_ELLIPSE_CB_INDEX         0x1A
+#define TS_NEG_INDEX_INDEX              0x1B
+                                     /* 0x1C */
+                                     /* 0x1D */
+                                     /* 0x1E */
+                                     /* 0x1F */
+
 /* drawable types */
 #define WND_TYPE_BITMAP  0
 #define WND_TYPE_WND     1
@@ -539,9 +591,9 @@
 #define  COMPDESK_NOT_SUPPORTED      0x0000
 #define  COMPDESK_SUPPORTED          0x0001
 
-#define SURCMDS_SETSURFACEBITS      0x00000002
-#define SURCMDS_FRAMEMARKER         0x00000010
-#define SURCMDS_STREAMSUFRACEBITS   0x00000040
+#define SURFCMDS_SETSURFACEBITS      0x00000002
+#define SURFCMDS_FRAMEMARKER         0x00000010
+#define SURFCMDS_STREAMSUFRACEBITS   0x00000040
 
 /* CODEC_GUID_NSCODEC  CA8D1BB9-000F-154F-589FAE2D1A87E2D6 */
 #define XR_CODEC_GUID_NSCODEC \
@@ -550,6 +602,10 @@
 /* CODEC_GUID_REMOTEFX 76772F12-BD72-4463-AFB3B73C9C6F7886 */
 #define XR_CODEC_GUID_REMOTEFX \
   "\x12\x2F\x77\x76\x72\xBD\x63\x44\xAF\xB3\xB7\x3C\x9C\x6F\x78\x86"
+
+/* CODEC_GUID_IMAGE_REMOTEFX 2744CCD4-9D8A-4E74-803C-0ECBEEA19C54 */
+#define XR_CODEC_GUID_IMAGE_REMOTEFX \
+  "\xD4\xCC\x44\x27\x8A\x9D\x74\x4E\x80\x3C\x0E\xCB\xEE\xA1\x9C\x54"
 
 /* CODEC_GUID_JPEG     1BAF4CE6-9EED-430C-869ACB8B37B66237 */
 #define XR_CODEC_GUID_JPEG \
@@ -562,15 +618,6 @@
 /* MFVideoFormat_H264  0x34363248-0000-0010-800000AA00389B71 */
 #define XR_CODEC_GUID_H264 \
   "\x48\x32\x36\x34\x00\x00\x10\x00\x80\x00\x00\xAA\x00\x38\x9B\x71"
-
-#define RDP_CAPSET_SURFCMDS       0x1c
-#define RDP_CAPLEN_SURFCMDS       0x0c
-#define RDP_CAPSET_BMPCODECS      0x1d
-#define RDP_CAPLEN_BMPCODECS      0x1c
-#define RDP_CAPSET_COMPDESK       0x19
-#define RDP_CAPLEN_COMPDESK       0x06
-#define RDP_CAPSET_LPOINTER       0x27
-#define RDP_CAPLEN_LPOINTER       0x06
 
 /* fastpath input */
 #define FASTPATH_INPUT_SECURE_CHECKSUM 0x1

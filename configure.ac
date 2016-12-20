@@ -10,6 +10,8 @@ AC_C_CONST
 AC_PROG_LIBTOOL
 PKG_PROG_PKG_CONFIG
 
+AC_CONFIG_SUBDIRS([libpainter librfxcodec])
+
 # Use silent rules by default if supported by Automake
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
@@ -117,6 +119,11 @@ AC_ARG_ENABLE(pixman, AS_HELP_STRING([--enable-pixman],
               [Use pixman library (default: no)]),
               [], [enable_pixman=no])
 AM_CONDITIONAL(XRDP_PIXMAN, [test x$enable_pixman = xyes])
+AM_CONDITIONAL(XRDP_PAINTER, [test x$enable_painter = xyes])
+AC_ARG_ENABLE(painter, AS_HELP_STRING([--enable-painter],
+              [Use painter library (default: no)]),
+              [], [enable_painter=no])
+AM_CONDITIONAL(XRDP_PAINTER, [test x$enable_painter = xyes])
 
 # Check if -ldl is needed to use dlopen()
 DLOPEN_LIBS=
