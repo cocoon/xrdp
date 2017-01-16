@@ -55,15 +55,6 @@ AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_sy
 AC_ARG_ENABLE(pam, AS_HELP_STRING([--disable-pam],
               [Build PAM support (default: yes)]),
               [], [enable_pam=yes])
-AC_ARG_ENABLE(nopam, AS_HELP_STRING([--enable-nopam],
-              [Build no PAM support (default: no, deprecated)]),
-              [
-                  if test "x$enable_nopam" = "xyes"
-                  then
-                      enable_pam=no
-                      AC_MSG_WARN([--enable-nopam option is deprecated. Please use --disable-pam instead.])
-                  fi
-              ])
 AM_CONDITIONAL(SESMAN_NOPAM, [test x$enable_pam != xyes])
 AC_ARG_ENABLE(ipv6, AS_HELP_STRING([--enable-ipv6],
               [Build IPv6 support (default: no, experimental)]),
@@ -83,6 +74,10 @@ AC_ARG_ENABLE(pamuserpass, AS_HELP_STRING([--enable-pamuserpass],
               [Build pam userpass support (default: no)]),
               [], [enable_pamuserpass=no])
 AM_CONDITIONAL(SESMAN_PAMUSERPASS, [test x$enable_pamuserpass = xyes])
+AC_ARG_ENABLE(pam-config, AS_HELP_STRING([--enable-pam-config=CONF],
+              [Select PAM config to install: debian, redhat, suse, unix
+               (default: autodetect)]))
+
 AC_ARG_ENABLE(xrdpdebug, AS_HELP_STRING([--enable-xrdpdebug],
               [Build debug (default: no)]),
               [], [enable_xrdpdebug=no])
@@ -165,7 +160,19 @@ then
         [AC_MSG_ERROR([please install libpam0g-dev or pam-devel])])
     fi
   fi
+  if test "x$enable_pam_config" = "x"; then
+    PAM_RULES="auto"
+  else
+    pam_config_file="$srcdir/instfiles/pam.d/xrdp-sesman.$enable_pam_config"
+    if test -f "$pam_config_file"; then
+      PAM_RULES="$enable_pam_config"
+    else
+      AC_MSG_ERROR([PAM file "$pam_config_file" is not available])
+    fi
+  fi
 fi
+
+AC_SUBST(PAM_RULES)
 
 if test "x$enable_ipv6only" = "xyes"
 then

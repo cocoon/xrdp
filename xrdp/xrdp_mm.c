@@ -491,8 +491,8 @@ static int APP_CC
 xrdp_mm_setup_mod2(struct xrdp_mm *self, tui8 *guid)
 {
     char text[256];
-    char *name;
-    char *value;
+    const char *name;
+    const char *value;
     int i;
     int rv;
     int key_flags;
@@ -562,7 +562,7 @@ xrdp_mm_setup_mod2(struct xrdp_mm *self, tui8 *guid)
         /* always set these */
 
         self->mod->mod_set_param(self->mod, "client_info",
-                                 (char *)(self->wm->session->client_info));
+                                 (const char *) (self->wm->session->client_info));
 
         name = self->wm->session->client_info->hostname;
         self->mod->mod_set_param(self->mod, "hostname", name);
@@ -575,8 +575,8 @@ xrdp_mm_setup_mod2(struct xrdp_mm *self, tui8 *guid)
 
         for (i = 0; i < self->login_names->count; i++)
         {
-            name = (char *)list_get_item(self->login_names, i);
-            value = (char *)list_get_item(self->login_values, i);
+            name = (const char *) list_get_item(self->login_names, i);
+            value = (const char *) list_get_item(self->login_values, i);
             self->mod->mod_set_param(self->mod, name, value);
         }
 
@@ -740,8 +740,11 @@ xrdp_mm_trans_process_channel_data(struct xrdp_mm *self, struct trans *trans)
 
     if (rv == 0)
     {
-        rv = libxrdp_send_to_channel(self->wm->session, chan_id, s->p, size, total_size,
-                                     chan_flags);
+        if (is_channel_allowed(self->wm, chan_id))
+        {
+            rv = libxrdp_send_to_channel(self->wm->session, chan_id, s->p, size, total_size,
+                                         chan_flags);
+        }
     }
 
     return rv;
