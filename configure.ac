@@ -46,7 +46,12 @@ AM_CONDITIONAL(NETBSD, [test "x$netbsd" = xyes])
 
 AC_ARG_WITH([systemdsystemunitdir],
         AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [Directory for systemd service files]),
-        [], [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
+        [], [
+if test "x$linux" = xyes; then
+  with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)
+fi
+])
+
 if test "x$with_systemdsystemunitdir" != xno; then
         AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 fi
@@ -139,6 +144,10 @@ AC_SUBST(DLOPEN_LIBS)
 # checking for openssl
 PKG_CHECK_MODULES([OPENSSL], [openssl >= 0], [],
   [AC_MSG_ERROR([please install libssl-dev or openssl-devel])])
+
+# look for openssl binary
+OPENSSL_BIN=`$PKG_CONFIG --variable=exec_prefix openssl`/bin
+AC_PATH_PROGS([OPENSSL], [openssl], [:], [$OPENSSL_BIN:$PATH])
 
 # checking for pam variation
 # Linux-PAM is used in Linux systems
@@ -307,7 +316,6 @@ AC_CONFIG_FILES([
   pkgconfig/Makefile
   pkgconfig/xrdp.pc
   pkgconfig/xrdp-uninstalled.pc
-  rdp/Makefile
   sesman/chansrv/Makefile
   sesman/libscp/Makefile
   sesman/Makefile
