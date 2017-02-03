@@ -102,7 +102,7 @@ tui32 g_device_id;          /* unique device ID - announced by client */
 tui16 g_client_rdp_version; /* returned by client                     */
 struct stream *g_input_stream = NULL;
 
-void xfuse_devredir_cb_write_file(void *vp, char *buf, size_t length);
+void xfuse_devredir_cb_write_file(void *vp, const char *buf, size_t length);
 
 /*****************************************************************************/
 int APP_CC
@@ -1266,7 +1266,7 @@ dev_redir_file_write(void *fusep, tui32 DeviceId, tui32 FileId,
     int            bytes;
 
     log_debug("DeviceId=%d FileId=%d Length=%d Offset=%lld",
-              DeviceId, FileId, Length, Offset);
+              DeviceId, FileId, Length, (long long)Offset);
 
     xstream_new(s, 1024 + Length);
 
