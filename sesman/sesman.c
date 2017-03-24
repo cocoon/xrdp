@@ -24,6 +24,10 @@
  *
  */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #include "sesman.h"
 
 int g_sck;
@@ -39,7 +43,7 @@ tintptr g_term_event = 0;
  * @brief Starts sesman main loop
  *
  */
-static void DEFAULT_CC
+static void
 sesman_main_loop(void)
 {
     int in_sck;
@@ -144,7 +148,7 @@ print_usage(int retcode)
 }
 
 /******************************************************************************/
-int DEFAULT_CC
+int
 main(int argc, char **argv)
 {
     int fd;

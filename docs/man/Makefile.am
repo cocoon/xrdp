@@ -8,8 +8,7 @@ man_MANS = \
   xrdp-keygen.8 \
   xrdp-sesadmin.8 \
   xrdp-sesman.8 \
-  xrdp-sesrun.8 \
-  xrdp-sessvc.8
+  xrdp-sesrun.8
 
 EXTRA_DIST = $(man_MANS:=.in)
 
@@ -17,7 +16,8 @@ SUBST_VARS = sed \
    -e 's|@PACKAGE_VERSION[@]|$(PACKAGE_VERSION)|g' \
    -e 's|@bindir[@]|$(bindir)|g' \
    -e 's|@localstatedir[@]|$(localstatedir)|g' \
-   -e 's|@sysconfdir[@]|$(sysconfdir)|g'
+   -e 's|@sysconfdir[@]|$(sysconfdir)|g' \
+   -e 's|@socketdir[@]|$(socketdir)|g'
 
 subst_verbose = $(subst_verbose_@AM_V@)
 subst_verbose_ = $(subst_verbose_@AM_DEFAULT_V@)

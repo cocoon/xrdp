@@ -16,12 +16,18 @@
  * limitations under the License.
  */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+
+#include "file_loc.h"
 
 int main(int argc, char **argv)
 {
@@ -50,7 +56,7 @@ int main(int argc, char **argv)
     dis = strtol(display + 1, &p, 10);
     memset(&sa, 0, sizeof(sa));
     sa.sun_family = AF_UNIX;
-    sprintf(sa.sun_path, "/tmp/.xrdp/xrdp_disconnect_display_%d", dis);
+    sprintf(sa.sun_path, XRDP_DISCONNECT_STR, dis);
 
     if (access(sa.sun_path, F_OK) != 0)
     {

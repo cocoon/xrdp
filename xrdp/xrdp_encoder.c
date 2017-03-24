@@ -18,6 +18,10 @@
  * Encoder
  */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #include "xrdp_encoder.h"
 #include "xrdp.h"
 #include "thread_calls.h"
@@ -52,7 +56,7 @@ static int
 process_enc_h264(struct xrdp_encoder *self, XRDP_ENC_DATA *enc);
 
 /*****************************************************************************/
-struct xrdp_encoder *APP_CC
+struct xrdp_encoder *
 xrdp_encoder_create(struct xrdp_mm *mm)
 {
     struct xrdp_encoder *self;
@@ -132,6 +136,9 @@ xrdp_encoder_create(struct xrdp_mm *mm)
     g_snprintf(buf, 1024, "xrdp_%8.8x_encoder_term", pid);
     self->xrdp_encoder_term = g_create_wait_obj(buf);
     self->max_compressed_bytes = client_info->max_fastpath_frag_bytes & ~15;
+    self->frames_in_flight = client_info->max_unacknowledged_frame_count;
+    /* make sure frames_in_flight is at least 1 */
+    self->frames_in_flight = MAX(self->frames_in_flight, 1);
 
     /* create thread to process messages */
     tc_thread_create(proc_enc_msg, self);
@@ -140,7 +147,7 @@ xrdp_encoder_create(struct xrdp_mm *mm)
 }
 
 /*****************************************************************************/
-void APP_CC
+void
 xrdp_encoder_delete(struct xrdp_encoder *self)
 {
     XRDP_ENC_DATA *enc;

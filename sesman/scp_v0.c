@@ -24,18 +24,23 @@
  *
  */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #include "sesman.h"
 
 extern struct config_sesman *g_cfg; /* in sesman.c */
 
 /******************************************************************************/
-void DEFAULT_CC
+void
 scp_v0_process(struct SCP_CONNECTION *c, struct SCP_SESSION *s)
 {
     int display = 0;
     tbus data;
     struct session_item *s_item;
     int errorcode = 0;
+    bool_t do_auth_end = 1;
 
     data = auth_userpass(s->username, s->password, &errorcode);
 
@@ -118,19 +123,22 @@ scp_v0_process(struct SCP_CONNECTION *c, struct SCP_SESSION *s)
                 if (SCP_SESSION_TYPE_XVNC == s->type)
                 {
                     log_message( LOG_LEVEL_INFO, "starting Xvnc session...");
-                    display = session_start(data, SESMAN_SESSION_TYPE_XVNC, s);
+                    display = session_start(data, SESMAN_SESSION_TYPE_XVNC, c, s);
                 }
                 else if (SCP_SESSION_TYPE_XRDP == s->type)
                 {
                     log_message(LOG_LEVEL_INFO, "starting X11rdp session...");
-                    display = session_start(data, SESMAN_SESSION_TYPE_XRDP, s);
+                    display = session_start(data, SESMAN_SESSION_TYPE_XRDP, c, s);
                 }
                 else if (SCP_SESSION_TYPE_XORG == s->type)
                 {
                     /* type is SCP_SESSION_TYPE_XORG */
                     log_message(LOG_LEVEL_INFO, "starting Xorg session...");
-                    display = session_start(data, SESMAN_SESSION_TYPE_XORG, s);
+                    display = session_start(data, SESMAN_SESSION_TYPE_XORG, c, s);
                 }
+                /* if the session started up ok, auth_end will be called on
+                   sig child */
+                do_auth_end = display == 0;
             }
             else
             {
@@ -151,5 +159,8 @@ scp_v0_process(struct SCP_CONNECTION *c, struct SCP_SESSION *s)
     {
         scp_v0s_deny_connection(c);
     }
-    auth_end(data);
+    if (do_auth_end)
+    {
+        auth_end(data);
+    }
 }

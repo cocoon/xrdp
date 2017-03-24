@@ -18,6 +18,10 @@
  * secure layer
  */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #include "libxrdp.h"
 #include "log.h"
 
@@ -186,7 +190,7 @@ static const tui8 g_fips_ivec[8] =
 };
 
 /*****************************************************************************/
-static void APP_CC
+static void
 hex_str_to_bin(char *in, char *out, int out_len)
 {
     int in_index;
@@ -221,7 +225,7 @@ hex_str_to_bin(char *in, char *out, int out_len)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_load_keyboard_layout(struct xrdp_client_info *client_info)
 {
     int fd;
@@ -436,7 +440,7 @@ xrdp_load_keyboard_layout(struct xrdp_client_info *client_info)
 }
 
 /*****************************************************************************/
-struct xrdp_sec *APP_CC
+struct xrdp_sec *
 xrdp_sec_create(struct xrdp_rdp *owner, struct trans *trans)
 {
     struct xrdp_sec *self;
@@ -457,7 +461,7 @@ xrdp_sec_create(struct xrdp_rdp *owner, struct trans *trans)
 }
 
 /*****************************************************************************/
-void APP_CC
+void
 xrdp_sec_delete(struct xrdp_sec *self)
 {
     if (self == 0)
@@ -483,7 +487,7 @@ xrdp_sec_delete(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* returns error */
-int APP_CC
+int
 xrdp_sec_init(struct xrdp_sec *self, struct stream *s)
 {
     if (xrdp_mcs_init(self->mcs_layer, s) != 0)
@@ -512,7 +516,7 @@ xrdp_sec_init(struct xrdp_sec *self, struct stream *s)
 
 /*****************************************************************************/
 /* Reduce key entropy from 64 to 40 bits */
-static void APP_CC
+static void
 xrdp_sec_make_40bit(char *key)
 {
     key[0] = 0xd1;
@@ -523,7 +527,7 @@ xrdp_sec_make_40bit(char *key)
 /*****************************************************************************/
 /* returns error */
 /* update an encryption key */
-static int APP_CC
+static int
 xrdp_sec_update(char *key, char *update_key, int key_len)
 {
     char shasig[20];
@@ -559,7 +563,7 @@ xrdp_sec_update(char *key, char *update_key, int key_len)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_fips_decrypt(struct xrdp_sec *self, char *data, int len)
 {
     LLOGLN(10, ("xrdp_sec_fips_decrypt:"));
@@ -568,7 +572,7 @@ xrdp_sec_fips_decrypt(struct xrdp_sec *self, char *data, int len)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_decrypt(struct xrdp_sec *self, char *data, int len)
 {
     LLOGLN(10, ("xrdp_sec_decrypt:"));
@@ -585,7 +589,7 @@ xrdp_sec_decrypt(struct xrdp_sec *self, char *data, int len)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_fips_encrypt(struct xrdp_sec *self, char *data, int len)
 {
     LLOGLN(10, ("xrdp_sec_fips_encrypt:"));
@@ -594,7 +598,7 @@ xrdp_sec_fips_encrypt(struct xrdp_sec *self, char *data, int len)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_encrypt(struct xrdp_sec *self, char *data, int len)
 {
     LLOGLN(10, ("xrdp_sec_encrypt:"));
@@ -611,44 +615,54 @@ xrdp_sec_encrypt(struct xrdp_sec *self, char *data, int len)
     self->encrypt_use_count++;
 }
 
-/*****************************************************************************/
-static int APP_CC
-unicode_in(struct stream *s, int uni_len, char *dst, int dst_len)
+/*****************************************************************************
+ * convert utf-16 encoded string from stream into utf-8 string.
+ * note: src_bytes doesn't include the null-terminator char.
+ */
+static int
+unicode_utf16_in(struct stream *s, int src_bytes, char *dst, int dst_len)
 {
-    int dst_index;
-    int src_index;
+    twchar *src;
+    int num_chars;
+    int i;
+    int bytes;
 
-    dst_index = 0;
-    src_index = 0;
-
-    while (src_index < uni_len)
+    LLOGLN(10, ("unicode_utf16_in: uni_len %d, dst_len %d", src_bytes, dst_len));
+    if (src_bytes == 0)
     {
-        if (dst_index >= dst_len || src_index > 512)
-        {
-            break;
-        }
-
         if (!s_check_rem(s, 2))
         {
             return 1;
         }
-        in_uint8(s, dst[dst_index]);
-        in_uint8s(s, 1);
-        dst_index++;
-        src_index += 2;
+        in_uint8s(s, 2); /* null terminator */
+        return 0;
     }
 
-    if (!s_check_rem(s, 2))
+    bytes = src_bytes + 2; /* include the null terminator */
+    src = g_new0(twchar, bytes);
+    for (i = 0; i < bytes / 2; ++i)
     {
-        return 1;
+        if (!s_check_rem(s, 2))
+        {
+            g_free(src);
+            return 1;
+        }
+        in_uint16_le(s, src[i]);
     }
-    in_uint8s(s, 2);
+    num_chars = g_wcstombs(dst, src, dst_len);
+    if (num_chars < 0)
+    {
+        g_memset(dst, '\0', dst_len);
+    }
+    LLOGLN(10, ("unicode_utf16_in: num_chars %d, dst %s", num_chars, dst));
+    g_free(src);
+
     return 0;
 }
 
 /*****************************************************************************/
 /* returns error */
-static int APP_CC
+static int
 xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
 {
     int flags = 0;
@@ -778,12 +792,12 @@ xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
         return 1;
     }
 
-    if (unicode_in(s, len_domain, self->rdp_layer->client_info.domain, 255) != 0)
+    if (unicode_utf16_in(s, len_domain, self->rdp_layer->client_info.domain, sizeof(self->rdp_layer->client_info.domain) - 1) != 0)
     {
         return 1;
     }
     DEBUG(("domain %s", self->rdp_layer->client_info.domain));
-    if (unicode_in(s, len_user, self->rdp_layer->client_info.username, 255) != 0)
+    if (unicode_utf16_in(s, len_user, self->rdp_layer->client_info.username, sizeof(self->rdp_layer->client_info.username) - 1) != 0)
     {
         return 1;
     }
@@ -791,7 +805,7 @@ xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
 
     if (flags & RDP_LOGON_AUTO)
     {
-        if (unicode_in(s, len_password, self->rdp_layer->client_info.password, 255) != 0)
+        if (unicode_utf16_in(s, len_password, self->rdp_layer->client_info.password, sizeof(self->rdp_layer->client_info.password) - 1) != 0)
         {
             return 1;
         }
@@ -811,12 +825,12 @@ xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
         }
     }
 
-    if (unicode_in(s, len_program, self->rdp_layer->client_info.program, 255) != 0)
+    if (unicode_utf16_in(s, len_program, self->rdp_layer->client_info.program, sizeof(self->rdp_layer->client_info.program) - 1) != 0)
     {
         return 1;
     }
     DEBUG(("program %s", self->rdp_layer->client_info.program));
-    if (unicode_in(s, len_directory, self->rdp_layer->client_info.directory, 255) != 0)
+    if (unicode_utf16_in(s, len_directory, self->rdp_layer->client_info.directory, sizeof(self->rdp_layer->client_info.directory) - 1) != 0)
     {
         return 1;
     }
@@ -830,7 +844,7 @@ xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
         }
         in_uint8s(s, 2);                                    /* unknown */
         in_uint16_le(s, len_ip);
-        if (unicode_in(s, len_ip - 2, tmpdata, 255) != 0)
+        if (unicode_utf16_in(s, len_ip - 2, tmpdata, sizeof(tmpdata) - 1) != 0)
         {
             return 1;
         }
@@ -839,7 +853,7 @@ xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
             return 1;
         }
         in_uint16_le(s, len_dll);
-        if (unicode_in(s, len_dll - 2, tmpdata, 255) != 0)
+        if (unicode_utf16_in(s, len_dll - 2, tmpdata, sizeof(tmpdata) - 1) != 0)
         {
             return 1;
         }
@@ -861,7 +875,7 @@ xrdp_sec_process_logon_info(struct xrdp_sec *self, struct stream *s)
 
 /*****************************************************************************/
 /* returns error */
-static int APP_CC
+static int
 xrdp_sec_send_lic_initial(struct xrdp_sec *self)
 {
     struct stream *s;
@@ -891,7 +905,7 @@ xrdp_sec_send_lic_initial(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* returns error */
-static int APP_CC
+static int
 xrdp_sec_send_lic_response(struct xrdp_sec *self)
 {
     struct stream *s;
@@ -920,7 +934,7 @@ xrdp_sec_send_lic_response(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* returns error */
-static int APP_CC
+static int
 xrdp_sec_send_media_lic_response(struct xrdp_sec *self)
 {
     struct stream *s;
@@ -948,7 +962,7 @@ xrdp_sec_send_media_lic_response(struct xrdp_sec *self)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_rsa_op(struct xrdp_sec *self, char *out, char *in, int in_bytes,
                 char *mod, char *exp)
 {
@@ -958,7 +972,7 @@ xrdp_sec_rsa_op(struct xrdp_sec *self, char *out, char *in, int in_bytes,
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_hash_48(char *out, char *in, char *salt1, char *salt2, int salt)
 {
     int i;
@@ -992,7 +1006,7 @@ xrdp_sec_hash_48(char *out, char *in, char *salt1, char *salt2, int salt)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_hash_16(char *out, char *in, char *salt1, char *salt2)
 {
     void *md5_info;
@@ -1007,7 +1021,7 @@ xrdp_sec_hash_16(char *out, char *in, char *salt1, char *salt2)
 }
 
 /*****************************************************************************/
-static void APP_CC
+static void
 fips_expand_key_bits(const char *in, char *out)
 {
     tui8 buf[32];
@@ -1051,7 +1065,7 @@ fips_expand_key_bits(const char *in, char *out)
 }
 
 /****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_fips_establish_keys(struct xrdp_sec *self)
 {
     char server_encrypt_key[32];
@@ -1096,7 +1110,7 @@ xrdp_sec_fips_establish_keys(struct xrdp_sec *self)
 }
 
 /****************************************************************************/
-static void APP_CC
+static void
 xrdp_sec_establish_keys(struct xrdp_sec *self)
 {
     char session_key[48];
@@ -1137,7 +1151,7 @@ xrdp_sec_establish_keys(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* returns error */
-int APP_CC
+int
 xrdp_sec_recv_fastpath(struct xrdp_sec *self, struct stream *s)
 {
     int ver;
@@ -1199,7 +1213,7 @@ xrdp_sec_recv_fastpath(struct xrdp_sec *self, struct stream *s)
 }
 /*****************************************************************************/
 /* returns error */
-int APP_CC
+int
 xrdp_sec_recv(struct xrdp_sec *self, struct stream *s, int *chan)
 {
     int flags;
@@ -1364,7 +1378,7 @@ buf_out_uint32(char *buffer, int value)
 
 /*****************************************************************************/
 /* Generate a MAC hash (5.2.3.1), using a combination of SHA1 and MD5 */
-static void APP_CC
+static void
 xrdp_sec_fips_sign(struct xrdp_sec *self, char *out, int out_len,
                    char *data, int data_len)
 {
@@ -1381,7 +1395,7 @@ xrdp_sec_fips_sign(struct xrdp_sec *self, char *out, int out_len,
 
 /*****************************************************************************/
 /* Generate a MAC hash (5.2.3.1), using a combination of SHA1 and MD5 */
-static void APP_CC
+static void
 xrdp_sec_sign(struct xrdp_sec *self, char *out, int out_len,
               char *data, int data_len)
 {
@@ -1412,7 +1426,7 @@ xrdp_sec_sign(struct xrdp_sec *self, char *out, int out_len,
 
 /*****************************************************************************/
 /* returns error */
-int APP_CC
+int
 xrdp_sec_send(struct xrdp_sec *self, struct stream *s, int chan)
 {
     int datalen;
@@ -1462,7 +1476,7 @@ xrdp_sec_send(struct xrdp_sec *self, struct stream *s, int chan)
 
 /*****************************************************************************/
 /* returns the fastpath sec byte count */
-int APP_CC
+int
 xrdp_sec_get_fastpath_bytes(struct xrdp_sec *self)
 {
     if (self->crypt_level == CRYPT_LEVEL_FIPS)
@@ -1478,7 +1492,7 @@ xrdp_sec_get_fastpath_bytes(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* returns error */
-int APP_CC
+int
 xrdp_sec_init_fastpath(struct xrdp_sec *self, struct stream *s)
 {
     if (xrdp_fastpath_init(self->fastpath_layer, s) != 0)
@@ -1504,7 +1518,7 @@ xrdp_sec_init_fastpath(struct xrdp_sec *self, struct stream *s)
 /* returns error */
 /* 2.2.9.1.2 Server Fast-Path Update PDU (TS_FP_UPDATE_PDU)
  * http://msdn.microsoft.com/en-us/library/cc240621.aspx */
-int APP_CC
+int
 xrdp_sec_send_fastpath(struct xrdp_sec *self, struct stream *s)
 {
     int secFlags;
@@ -1577,7 +1591,7 @@ xrdp_sec_send_fastpath(struct xrdp_sec *self, struct stream *s)
 /*****************************************************************************/
 /* http://msdn.microsoft.com/en-us/library/cc240510.aspx
    2.2.1.3.2 Client Core Data (TS_UD_CS_CORE) */
-static int APP_CC
+static int
 xrdp_sec_process_mcs_data_CS_CORE(struct xrdp_sec* self, struct stream* s)
 {
     int colorDepth;
@@ -1585,6 +1599,7 @@ xrdp_sec_process_mcs_data_CS_CORE(struct xrdp_sec* self, struct stream* s)
     int highColorDepth;
     int supportedColorDepths;
     int earlyCapabilityFlags;
+    char clientName[INFO_CLIENT_NAME_BYTES / 2] = { '\0' };
 
     in_uint8s(s, 4); /* version */
     in_uint16_le(s, self->rdp_layer->client_info.width);
@@ -1603,7 +1618,8 @@ xrdp_sec_process_mcs_data_CS_CORE(struct xrdp_sec* self, struct stream* s)
     in_uint8s(s, 2); /* SASSequence */
     in_uint8s(s, 4); /* keyboardLayout */
     in_uint8s(s, 4); /* clientBuild */
-    in_uint8s(s, 32); /* clientName */
+    unicode_utf16_in(s, INFO_CLIENT_NAME_BYTES - 2, clientName, sizeof(clientName) - 1);  /* clientName */
+    log_message(LOG_LEVEL_INFO, "connected client computer name: %s", clientName);
     in_uint8s(s, 4); /* keyboardType */
     in_uint8s(s, 4); /* keyboardSubType */
     in_uint8s(s, 4); /* keyboardFunctionKey */
@@ -1720,7 +1736,7 @@ xrdp_sec_process_mcs_data_CS_CORE(struct xrdp_sec* self, struct stream* s)
 }
 
 /*****************************************************************************/
-static int APP_CC
+static int
 xrdp_sec_process_mcs_data_CS_SECURITY(struct xrdp_sec *self, struct stream* s)
 {
     int crypt_method;
@@ -1819,7 +1835,7 @@ xrdp_sec_process_mcs_data_CS_SECURITY(struct xrdp_sec *self, struct stream* s)
 /*****************************************************************************/
 /* this adds the mcs channels in the list of channels to be used when
    creating the server mcs data */
-static int APP_CC
+static int
 xrdp_sec_process_mcs_data_channels(struct xrdp_sec *self, struct stream *s)
 {
     int num_channels;
@@ -1880,7 +1896,7 @@ xrdp_sec_process_mcs_data_channels(struct xrdp_sec *self, struct stream *s)
 
 /*****************************************************************************/
 /* reads the client monitors data */
-static int APP_CC
+static int
 xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
 {
     int index;
@@ -2010,7 +2026,7 @@ xrdp_sec_process_mcs_data_monitors(struct xrdp_sec *self, struct stream *s)
 /*****************************************************************************/
 /* process client mcs data, we need some things in here to create the server
    mcs data */
-int APP_CC
+int
 xrdp_sec_process_mcs_data(struct xrdp_sec *self)
 {
     struct stream *s = (struct stream *)NULL;
@@ -2108,7 +2124,7 @@ xrdp_sec_process_mcs_data(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* process the mcs client data we received from the mcs layer */
-static int APP_CC
+static int
 xrdp_sec_in_mcs_data(struct xrdp_sec *self)
 {
     struct stream *s = (struct stream *)NULL;
@@ -2172,7 +2188,7 @@ xrdp_sec_in_mcs_data(struct xrdp_sec *self)
 
 /*****************************************************************************/
 /* returns error */
-int APP_CC
+int
 xrdp_sec_init_rdp_security(struct xrdp_sec *self)
 {
     switch (self->rdp_layer->client_info.crypt_level)
@@ -2224,7 +2240,7 @@ xrdp_sec_init_rdp_security(struct xrdp_sec *self)
 }
 
 /*****************************************************************************/
-int APP_CC
+int
 xrdp_sec_incoming(struct xrdp_sec *self)
 {
     struct list *items = NULL;
@@ -2360,7 +2376,7 @@ xrdp_sec_incoming(struct xrdp_sec *self)
 }
 
 /*****************************************************************************/
-int APP_CC
+int
 xrdp_sec_disconnect(struct xrdp_sec *self)
 {
     int rv;

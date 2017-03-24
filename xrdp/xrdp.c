@@ -18,6 +18,10 @@
  * main program
  */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #include "xrdp.h"
 #include "log.h"
 
@@ -45,7 +49,7 @@ static long (*g_sync_func)(long param1, long param2);
 /* This function is used to run a function from the main thread.
    Sync_func is the function pointer that will run from main thread
    The function can have two long in parameters and must return long */
-long APP_CC
+long
 g_xrdp_sync(long (*sync_func)(long param1, long param2), long sync_param1,
             long sync_param2)
 {
@@ -100,7 +104,7 @@ g_xrdp_sync(long (*sync_func)(long param1, long param2), long sync_param1,
 }
 
 /*****************************************************************************/
-void DEFAULT_CC
+void
 xrdp_shutdown(int sig)
 {
     tbus threadid;
@@ -116,7 +120,7 @@ xrdp_shutdown(int sig)
 }
 
 /*****************************************************************************/
-void DEFAULT_CC
+void
 xrdp_child(int sig)
 {
     g_waitchild();
@@ -124,7 +128,7 @@ xrdp_child(int sig)
 
 /*****************************************************************************/
 /* called in child just after fork */
-int APP_CC
+int
 xrdp_child_fork(void)
 {
     int pid;
@@ -142,14 +146,14 @@ xrdp_child_fork(void)
 }
 
 /*****************************************************************************/
-int DEFAULT_CC
+int
 g_is_term(void)
 {
     return g_is_wait_obj_set(g_term_event);
 }
 
 /*****************************************************************************/
-void APP_CC
+void
 g_set_term(int in_val)
 {
     if (in_val)
@@ -163,21 +167,21 @@ g_set_term(int in_val)
 }
 
 /*****************************************************************************/
-tbus APP_CC
+tbus
 g_get_term_event(void)
 {
     return g_term_event;
 }
 
 /*****************************************************************************/
-tbus APP_CC
+tbus
 g_get_sync_event(void)
 {
     return g_sync_event;
 }
 
 /*****************************************************************************/
-void DEFAULT_CC
+void
 pipe_sig(int sig_num)
 {
     /* do nothing */
@@ -187,7 +191,7 @@ pipe_sig(int sig_num)
 /*****************************************************************************/
 /*Some function must be called from the main thread.
  if g_sync_command==THREAD_WAITING a function is waiting to be processed*/
-void APP_CC
+void
 g_process_waiting_function(void)
 {
     tc_mutex_lock(g_sync_mutex);
@@ -209,7 +213,7 @@ g_process_waiting_function(void)
 }
 
 /*****************************************************************************/
-int APP_CC
+int
 xrdp_process_params(int argc, char **argv,
                     struct xrdp_startup_params *startup_params)
 {
@@ -356,7 +360,7 @@ xrdp_sanity_check(void)
 }
 
 /*****************************************************************************/
-int DEFAULT_CC
+int
 main(int argc, char **argv)
 {
     int test;
@@ -631,6 +635,7 @@ main(int argc, char **argv)
     }
 
     g_free(startup_params);
+    log_end();
     g_deinit();
     return 0;
 }

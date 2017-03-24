@@ -43,6 +43,10 @@
 char g_fuse_root_path[256] = "";
 char g_fuse_clipboard_path[256] = ""; /* for clipboard use */
 
+#if defined(HAVE_CONFIG_H)
+#include <config_ac.h>
+#endif
+
 #ifndef XRDP_FUSE
 
 /******************************************************************************
@@ -361,7 +365,7 @@ static void xfuse_mark_as_stale(fuse_ino_t pinode);
 static void xfuse_delete_stale_entries(fuse_ino_t pinode);
 
 /*****************************************************************************/
-int APP_CC
+int
 load_fuse_config(void)
 {
     int index;
@@ -403,7 +407,7 @@ load_fuse_config(void)
  * @return 0 on success, -1 on failure
  *****************************************************************************/
 
-int APP_CC
+int
 xfuse_init(void)
 {
     struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
@@ -485,7 +489,7 @@ xfuse_init(void)
  * @return 0 on success, -1 on failure
  *****************************************************************************/
 
-int APP_CC
+int
 xfuse_deinit(void)
 {
     xfuse_deinit_xrdp_fs();
