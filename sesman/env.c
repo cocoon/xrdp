@@ -132,6 +132,7 @@ env_set_user(const char *username, char **passwd_file, int display,
             g_setenv("SHELL", pw_shell, 1);
             g_setenv("PATH", "/sbin:/bin:/usr/bin:/usr/local/bin", 1);
             g_setenv("USER", username, 1);
+            g_setenv("LOGNAME", username, 1);
             g_sprintf(text, "%d", uid);
             g_setenv("UID", text, 1);
             g_setenv("HOME", pw_dir, 1);
@@ -139,6 +140,8 @@ env_set_user(const char *username, char **passwd_file, int display,
             g_sprintf(text, ":%d.0", display);
             g_setenv("DISPLAY", text, 1);
             g_setenv("XRDP_SESSION", "1", 1);
+            /* XRDP_SOCKET_PATH should be set even here, chansrv uses this */
+            g_setenv("XRDP_SOCKET_PATH", XRDP_SOCKET_PATH, 1);
             if ((env_names != 0) && (env_values != 0) &&
                 (env_names->count == env_values->count))
             {
