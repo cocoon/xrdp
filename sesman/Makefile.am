@@ -2,6 +2,7 @@ EXTRA_DIST = \
   Doxyfile
 
 AM_CPPFLAGS = \
+  -DXRDP_SYSCONF_PATH=\"${sysconfdir}\" \
   -DXRDP_CFG_PATH=\"${sysconfdir}/xrdp\" \
   -DXRDP_SBIN_PATH=\"${sbindir}\" \
   -DXRDP_SHARE_PATH=\"${datadir}/xrdp\" \
@@ -78,7 +79,8 @@ dist_sesmansysconf_DATA = \
   sesman.ini
 
 dist_sesmansysconf_SCRIPTS = \
-  startwm.sh
+  startwm.sh \
+  reconnectwm.sh
 
 SUBDIRS = \
   libscp \
