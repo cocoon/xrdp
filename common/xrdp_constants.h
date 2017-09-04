@@ -77,6 +77,15 @@
 #define MCS_GLOBAL_CHANNEL             1003
 #define MCS_USERCHANNEL_BASE           1001
 
+/* MCS Connection Type (MS-RDPBCGR 2.2.1.3.2) */
+#define CONNECTION_TYPE_MODEM          0x01
+#define CONNECTION_TYPE_BROADBAND_LOW  0x02
+#define CONNECTION_TYPE_SATELLITE      0x03
+#define CONNECTION_TYPE_BROADBAND_HIGH 0x04
+#define CONNECTION_TYPE_WAN            0x05
+#define CONNECTION_TYPE_LAN            0x06
+#define CONNECTION_TYPE_AUTODETECT     0x07
+
 /* RDP secure transport constants */
 #define SEC_RANDOM_SIZE                32
 #define SEC_MODULUS_SIZE               64
@@ -385,11 +394,14 @@
 #define CF_GDIOBJFIRST                 768
 #define CF_GDIOBJLAST                  1023
 
-/* Sound format constants */
-#define WAVE_FORMAT_PCM                1
-#define WAVE_FORMAT_ADPCM              2
-#define WAVE_FORMAT_ALAW               6
-#define WAVE_FORMAT_MULAW              7
+/* Sound format constants - see also RFC 2361 */
+#define WAVE_FORMAT_PCM                0x0001
+#define WAVE_FORMAT_ADPCM              0x0002
+#define WAVE_FORMAT_ALAW               0x0006
+#define WAVE_FORMAT_MULAW              0x0007
+#define WAVE_FORMAT_MPEGLAYER3         0x0055
+#define WAVE_FORMAT_OPUS               0x0069
+#define WAVE_FORMAT_AAC                0xA106
 
 /* Virtual channel options */
 #define XR_CHANNEL_OPTION_SHOW_PROTOCOL 0x00200000

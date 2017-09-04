@@ -1,3 +1,42 @@
+# Release notes for xrdp v0.9.3.1 (2017/08/16)
+
+This release fixes a trivial packaging issue #848 occurred in v0.9.3.  The issue only affects systemd systems.  This release is principally for distro packagers or users who compile & install xrdp from source.
+
+Users who running xrdp on these systems don't need to upgrade from v0.9.3 to v0.9.3.1.
+
+* Linux systems without systemd
+* non-Linux systems such as BSD operating systems
+
+# Release notes for xrdp v0.9.3 (2017/07/15)
+
+## New features
+  * Log user-friendly messages when certificate/privkey is inaccessible
+
+## Bugfixes
+  * Now sesman sets mandatory LOGNAME environment variable #725
+  * Now sesman ensures socket directory present #801
+  * Exit with failure status if port already in use #644
+  * Eliminate some hard coded paths
+  * Fix glitches with IPv4 struct initialization #803
+  * Fix some keyboard layout integration (UK, Spanish)
+  * Fix handle OS when IPv6 disabled #714
+  * Fix issues around systemd session #778
+  * Fix protocol error when 32 bit color and non RemoteFX session #737 #804
+  * Fix sesadmin shows error when no sessions #797
+  * Fix TLS spins 100% CPU #728
+  * Fix Xvnc backend disconnects when some data copied to clipboard #755
+  * Pick up the first section if given section(domain) doesn't match anything #750
+
+## Other changes
+  * Change xrdp-chansrv log path to include display number
+  * Optimize startwm.sh for SUSE
+  * Several cleanups and optimizations
+
+## Known issues
+  * Windows 10 (1703) shows black blank screen in RemoteFX mode
+
+-----------------------
+
 # Release notes for xrdp v0.9.2 (2017/03/30)
 ## New features
   * RemoteFX codec support is now enabled by default.
